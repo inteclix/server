@@ -45,7 +45,7 @@ class CarController extends Controller
                 'restititions.id as restititions.id',
                 'decharges.id as id',
                 'matricule',
-                DB::raw("drivers.firstname || ' ' || drivers.lastname as drivers_fullname"),
+                DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                 'code_gps',
                 'designation as clients.designation',
                 'decharges.date_decharge as date_decharge',
