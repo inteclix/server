@@ -177,7 +177,7 @@ class CarController extends Controller
                     "cars.code_gps",
                     "car_states.name as state",
                     "car_states.state_date",
-                    DB::raw("drivers.firstname || ' ' || drivers.lastname as drivers_fullname"),
+                    DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                 ])
                 ->where('matricule', 'like', "%{$request->get("matricule")}%");
             if ($request->auth->username !== "admin") {
@@ -224,7 +224,7 @@ class CarController extends Controller
                     "car_states.name as state",
                     "car_states.state_date",
                     "date_restitition",
-                    DB::raw("drivers.firstname || ' ' || drivers.lastname as drivers_fullname"),
+                    DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                 ])
                 ->where('matricule', 'like', "%{$request->get("matricule")}%")
                 ->orderBy($sortBy, $sort)
