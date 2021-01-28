@@ -19,6 +19,9 @@ class CreateNotificationsTable extends Migration
             $table->string('sub_title'); // ex: commercial : affectation de vehicule xxxx-xx-xx 
             $table->string('url'); // clickable if !is_read
             $table->boolean('is_read')->default(false);
+            
+            $table->string("type")->nullable();
+            $table->integer("type_id")->nullable();
 
             $table->integer('from_id')->unsigned();
             $table->foreign('from_id')->references('id')->on('users')

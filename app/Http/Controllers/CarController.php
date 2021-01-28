@@ -12,10 +12,12 @@ use Exception;
 use App\Car;
 use App\Exports\CarsExport;
 use App\Imports\CarsImport;
+use GrahamCampbell\ResultType\Success;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use stdClass;
+use App\Group;
 
 class CarController extends Controller
 {
@@ -179,11 +181,8 @@ class CarController extends Controller
                     "car_states.state_date",
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                 ])
-                ->where('matricule', 'like', "%{$request->get("matricule")}%");
-            if ($request->auth->username !== "admin") {
-                $data = $data->where("user_id", "=", "{$request->auth->id}");
-            }
-            $data = $data->orderBy($sortBy, $sort)
+                ->where('matricule', 'like', "%{$request->get("matricule")}%")
+                ->orderBy($sortBy, $sort)
                 ->paginate(
                     $pageSize, // per page (may be get it from request)
                     ['*'], // columns to select from table (default *, means all fields)
@@ -341,9 +340,78 @@ class CarController extends Controller
             'message' => 'Permission denied'
         ], Response::HTTP_UNAUTHORIZED);
     }
+
+    public function dashboard_vl(Request $request)
+    {
+        $capacity_logistics_vl = DB::table("cars")
+            ->join("car_group", "cars.id", "=", "car_group.car_id")
+            ->join("groups", "groups.id", "=", "car_group.group_id")
+            ->select([
+                "groups.name"
+            ])
+            ->where("groups.name", "=", "LEGER")
+            ->count();
+
+        $en_panne_vl = DB::table("cars")
+            ->join("car_group", "cars.id", "=", "car_group.car_id")
+            ->join("groups", "groups.id", "=", "car_group.group_id")
+            ->join('car_states', function ($join) {
+                $join->on('cars.id', '=', 'car_states.car_id')
+                    ->on('car_states.id', '=', DB::raw("(select max(id) from car_states WHERE car_states.car_id = cars.id)"));
+            })
+            ->select([
+                "groups.name"
+            ])
+            ->where("groups.name", "=", "LEGER")
+            ->whereIn("car_states.name", ["EN PANNE ATELIER", "EN PANNE PARC"])
+            ->count();
+
+        $accedente_v =  DB::table("cars")
+            ->join("car_group", "cars.id", "=", "car_group.car_id")
+            ->join("groups", "groups.id", "=", "car_group.group_id")
+            ->join('car_states', function ($join) {
+                $join->on('cars.id', '=', 'car_states.car_id')
+                    ->on('car_states.id', '=', DB::raw("(select max(id) from car_states WHERE car_states.car_id = cars.id)"));
+            })
+            ->select([
+                "groups.name"
+            ])
+            ->where("groups.name", "=", "LEGER")
+            ->whereIn("car_states.name", ["ACCIDENTE"])
+            ->count();
+
+
+        $affecte_vl = DB::table("cars")
+        ->join("car_group", "cars.id", "=", "car_group.car_id")
+        ->join("groups", "groups.id", "=", "car_group.group_id")
+        ->join('checklists', function ($join) {
+            $join->on('cars.id', '=', 'checklists.car_id')
+                ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.car_id = cars.id)"));
+        })
+        ->join("decharges", "decharges.id", "=", "checklists.decharge_id")
+        ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
+        ->select([
+            "groups.name"
+        ])
+        ->where("groups.name", "=", "LEGER")
+        ->count();
+
+        $operationel_vl = $capacity_logistics_vl - $accedente_v - $en_panne_vl;
+        
+        $non_exploite_vl = $operationel_vl - $affecte_vl;
+
+        return $this->success([
+            "capacity_logistics_vl" => $capacity_logistics_vl,
+            "en_panne_vl" => $en_panne_vl,
+            "accedente_v" => $accedente_v,
+            "affecte_vl" => $affecte_vl,
+            "operationel_vl" => $operationel_vl,
+            "non_exploite_vl" => $non_exploite_vl,
+        ], "Success");
+    }
     public function export(Request $request)
     {
-        return Excel::download(new CarsExport, 'cars.xlsx');
+        return Excel::download(new CarsExport, 'etat_vehicules.xlsx');
     }
     public function import(Request $request)
     {

@@ -6,9 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Pivot;
 use App\Car;
 
-class CarState extends Pivot
+class CarState extends Model
 {
     protected $table = 'car_states';
+
     public function car()
     {
         return $this->belongsTo('App\Car');

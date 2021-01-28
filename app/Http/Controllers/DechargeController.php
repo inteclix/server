@@ -24,7 +24,7 @@ use DateTime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PhpParser\Node\Stmt\TryCatch;
-
+use App\CarState;
 class DechargeController extends Controller
 {
 
@@ -140,6 +140,8 @@ class DechargeController extends Controller
             $n->url = "/decharges/show/" . $decharge->id;
             $n->from_id = $request->auth->id;
             $n->to_id = $user->id;
+            $n->type = "decharge";
+            $n->type_id = $decharge->id;
             try {
                 $n->save();
             } catch (QueryException $e) {
@@ -427,6 +429,38 @@ class DechargeController extends Controller
             // dump($e);
             return $this->error("Error !");
         }
+        if ($restitition->motif_restitition === "REMPLACEMENT VEHICULE (VEHICULE EN PANNE)") {
+            $c = new CarState;
+            $c->car_id = $request->car_id;
+            $c->name = "EN PANNE PARC";
+            $c->state_date = $restitition->date_restitition;
+            $c->observation = "";
+            $c->createdby_id = $request->auth->id;
+            try {
+                $c->save();
+            } catch (QueryException $e) {
+                return $this->error("Error");
+            }
+            $car = Car::find($request->car_id);
+            $users = $car->users()->get();
+            foreach ($users as $user) {
+                if ($user->id === $request->auth->id) {
+                    continue;
+                }
+                $n = new Notification;
+                $n->title = "Statu de vehicule: " . $car->code_gps . " | " . $car->matricule;
+                $n->sub_title = $c->name . " ,par " . $request->auth->username;
+                $n->url = "/cars_state/";
+                $n->from_id = $request->auth->id;
+                $n->to_id = $user->id;
+                $n->type = "car_state";
+                $n->type_id = $c->id;
+                try {
+                    $n->save();
+                } catch (QueryException $e) {
+                }
+            }
+        }
         return $this->success($restitition);
     }
 
@@ -463,141 +497,16 @@ class DechargeController extends Controller
                 $c->delete();
             }
             $d->delete();
+
+            $ns = Notification::where("type", "=", "decharge")->where("type_id", "=", $id)->get()->all();
+            foreach ($ns as $n) {
+                $n->delete();
+            }
             return $this->success([], "Bien supprimer");
         }
 
+
+
         return $this->error("Non Supprimer");
-    }
-
-    function getAffectations(Request $request)
-    {
-        $has_role = true;
-        foreach ($request->auth->roles as $role) {
-            if (
-                $role->name === "ADD_EDIT_AFFECTATIONS_CLIENTS" ||
-                $role->name === "ADD_EDIT_AFFECTATIONS_DRIVERS_CHECK_LIST" ||
-                $role->name === "ADD_EDIT_AFFECTATIONS_DRIVERS"
-            ) {
-                $has_role = true;
-            }
-        }
-        if ($has_role) {
-            $date1 = $request->get('date1');
-            $date2 = $request->get('date2');
-            if ($date1 && $date2) {
-                $resti = [$date1, null];
-                $all = CarClient::orderBy('id', 'desc')
-                    ->where('date_affectation', '<=', "{$date2}")
-                    ->where(function ($q) use ($date1) {
-                        $q->where('date_restitition', '>=', "{$date1}")
-                            ->orWhere('date_restitition', '=', null);
-                    })
-                    ->get()->all();
-                foreach ($all as $a) {
-                    $a->car = Car::find($a->car_id);
-                    $a->client = Client::find($a->client_id);
-                }
-                return new JsonResponse([
-                    'message' => 'Success get all',
-                    'data' => $all !== NULL ? $all : []
-                ], Response::HTTP_OK);
-            }
-            $all = CarClient::orderBy('id', 'desc')->take(100)->get()->all();
-            foreach ($all as $a) {
-                $a->car = Car::find($a->car_id);
-                $a->client = Client::find($a->client_id);
-            }
-            return new JsonResponse([
-                'message' => 'Success get all',
-                'data' => $all !== NULL ? $all : []
-            ], Response::HTTP_OK);
-        } else {
-            return new JsonResponse([
-                'message' => 'UNAUTHORIZED',
-                'data' => []
-            ], Response::HTTP_UNAUTHORIZED);
-        }
-    }
-
-    function create(Request $request)
-    {
-        $has_role_gm = false;
-        $has_role_ga = false;
-        $has_role_com = false;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name === "ADD_EDIT_AFFECTATIONS_CLIENTS") {
-                $has_role_com = true;
-            }
-            if ($role->name === "ADD_EDIT_AFFECTATIONS_DRIVERS_CHECK_LIST") {
-                $has_role_gm = true;
-            }
-            if ($role->name === "ADD_EDIT_AFFECTATIONS_DRIVERS") {
-                $has_role_ga = true;
-            }
-        }
-        if ($has_role_com) {
-            $this->validate($request, [
-                'client_id' => 'required',
-                'car_id' => 'required',
-                'date_affectation' => 'required',
-            ]);
-            $cc = CarClient::where('car_id', $request->car_id)->orderBy('created_at', 'desc')->first();
-            if ($cc &&  !$cc->date_restitition) {
-                return new JsonResponse([
-                    'message' => "vehicule deja affecte"
-                ], Response::HTTP_BAD_REQUEST);
-            }
-
-            try {
-                $carClient = CarClient::create([
-                    'client_id' => $request->client_id,
-                    'car_id' => $request->car_id,
-                    'affectation_client_comment' => $request->affectation_client_comment,
-                    'date_affectation' => Carbon::parse($request->date_affectation),
-                    'date_end_prestation' => $request->date_end_prestation ? Carbon::parse($request->date_end_prestation) : null,
-
-                    'createdby_id' => $request->auth->id,
-                ])->get()[0];
-            } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
-            }
-
-            //$c->
-            //   dump($carClient);
-            $car = Car::find($request->car_id);
-            $driver = $car->latestDriver();
-            $client = Client::find($request->client_id);
-            $users = User::all()->except($request->auth->id);
-            foreach ($users as $user) {
-                $n = new Notification;
-                $n->title = "Nouvelle Affectation Vehicule: " . $car->matricule . ", pour Client: " . $client->designation;
-                if ($driver) {
-                    $n->sub_title = "Conducteur: " . $driver->firstname . " " . $driver->lastname;
-                } else {
-                    $n->sub_title = "Conducteur:  Sans Conducteur";
-                }
-                $n->url = "/affectations/show/" . $carClient->id;
-                $n->from_id =  $request->auth->id;
-                $n->to_id = $user->id;
-                try {
-                    $n->save();
-                } catch (QueryException $e) {
-                    $carClient->delete();
-                    return new JsonResponse([
-                        'message' => $e
-                    ], Response::HTTP_BAD_REQUEST);
-                }
-            }
-
-            return new JsonResponse([
-                'message' => 'Success',
-                'data' => $carClient
-            ], Response::HTTP_CREATED);
-        }
-        return new JsonResponse([
-            'message' => 'Permission denied'
-        ], Response::HTTP_UNAUTHORIZED);
     }
 }

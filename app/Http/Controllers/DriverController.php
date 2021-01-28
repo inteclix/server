@@ -91,7 +91,7 @@ class DriverController extends Controller
             $c->firstname = $request->firstname;
             $c->lastname = $request->lastname;
             $c->tel = $request->tel;
-            $c->code_paie == 0 ? $c->code_paie = null : $c->code_paie = $request->code_paie;
+            ($c->request === 0 || $c->request === "0") ? $c->code_paie = null : $c->code_paie = $request->code_paie;
             $c->type = $request->type;
             $c->createdby_id = $request->auth->id;
             try {
@@ -164,7 +164,7 @@ class DriverController extends Controller
             $c->firstname = $request->firstname;
             $c->lastname = $request->lastname;
             $c->tel = $request->tel;
-            $c->code_paie == 0 ? $c->code_paie = null : $c->code_paie = $request->code_paie;
+            ($c->request === 0 || $c->request === "0") ? $c->code_paie = null : $c->code_paie = $request->code_paie;
             $c->type = $request->type;
             $c->createdby_id = $request->auth->id;
             try {

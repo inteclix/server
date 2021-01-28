@@ -13,6 +13,7 @@ use App\CarState;
 use App\Car;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use App\Notification;
 
 class CarStateController   extends Controller
 {
@@ -106,6 +107,25 @@ class CarStateController   extends Controller
         } catch (QueryException $e) {
             return $this->error("Error");
         }
+        $car = Car::find($request->car_id);
+        $users = $car->users()->get();
+        foreach ($users as $user) {
+            if ($user->id === $request->auth->id) {
+                continue;
+            }
+            $n = new Notification;
+            $n->title = "Statu de vehicule: " . $car->code_gps . " | " . $car->matricule;
+            $n->sub_title = $c->name . " ,par " . $request->auth->username;
+            $n->url = "/cars_state/";
+            $n->from_id = $request->auth->id;
+            $n->to_id = $user->id;
+            $n->type = "car_state";
+            $n->type_id = $c->id;
+            try {
+                $n->save();
+            } catch (QueryException $e) {
+            }
+        }
         return $this->success($c, "success");
     }
 
@@ -118,8 +138,12 @@ class CarStateController   extends Controller
                 'message' => 'Id d\'ont exist',
             ], Response::HTTP_BAD_REQUEST);
         }
-        if($request->auth->username === "admin" ||  $request->auth->id === $c->createdby_id){
+        if ($request->auth->username === "admin" ||  $request->auth->id === $c->createdby_id) {
             $c->delete();
+            $ns = Notification::where("type", "=", "car_state")->where("type_id", "=", $id)->get()->all();
+            foreach ($ns as $n) {
+                $n->delete();
+            }
             return $this->success([], "deleted");
         }
         return new JsonResponse([

@@ -391,4 +391,9 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
         'uses' => 'StateController@dowloadroles',
         'as' => 'api.state.dowloadroles'
     ]);
+
+    $router->get('/dashboard_vl', [
+        'uses' => 'CarController@dashboard_vl',
+        'as' => 'api.cars.dashboard_vl'
+    ]);
 });

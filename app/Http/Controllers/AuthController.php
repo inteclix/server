@@ -177,7 +177,7 @@ class AuthController extends Controller
     {
         $notifications = Notification::orderBy('id', 'desc')
             ->where('to_id', $request->auth->id)
-            ->take(15)->get()->all();;
+            ->take(10)->get()->all();;
         foreach ($notifications as $n) {
             $n->from = User::find($n->from_id);
         }
