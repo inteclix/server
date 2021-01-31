@@ -8,7 +8,6 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
 use Exception;
-
 use App\Car;
 use App\Exports\CarsExport;
 use App\Imports\CarsImport;
@@ -24,14 +23,17 @@ class CarController extends Controller
     function get($id, Request $request)
     {
         try {
-            $car = Car::findOrFail($id);
+            $car = Car::find($id);
         } catch (Exception $e) {
-            return $this->error('Id d\'ont exist');
+            return $this->http_not_found();
         }
-        return $this->success($car);
+        if ($this->hasRole($request, "LISTE_VEHICULES")) {
+            return $this->http_ok($car);
+        }
+        return $this->http_unauthorized();
     }
 
-    function getDechargeHistory(Request $request, $car_id)
+    function getDecharges(Request $request, $car_id)
     {
         $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
         $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
@@ -69,11 +71,9 @@ class CarController extends Controller
     function getClients($id, Request $request)
     {
         try {
-            $car = Car::findOrFail($id);
+            $car = Car::find($id);
         } catch (Exception $e) {
-            return new JsonResponse([
-                'message' => 'Id d\'ont exist',
-            ], Response::HTTP_BAD_REQUEST);
+            return $this->http_bad();
         }
         $clients = $car->clients()
             ->withPivot(["id", "createdby_id", "date_affectation", "date_end_prestation", "date_restitition"])
@@ -115,7 +115,7 @@ class CarController extends Controller
 
     function search(Request $request)
     {
-        $rows = DB::table("cars")
+        $cars = DB::table("cars")
             ->join("car_user", "cars.id", "car_user.car_id")
             ->join("users", "users.id", "car_user.user_id")
             ->select([
@@ -126,9 +126,9 @@ class CarController extends Controller
             ->where("users.id", "=", $request->auth->id)
             ->where("matricule", "like", "%{$request->data}%")
             ->take(8)
-            ->get();
+            ->get()->all();
 
-        return $this->success($rows, "all cars");
+        return $this->http_ok($cars);
     }
 
     function getAllCars(Request $request)
@@ -143,9 +143,9 @@ class CarController extends Controller
         return $this->success($cars);
     }
 
-    function getAll(Request $request)
+    function getAllUserCars(Request $request)
     {
-        if ($request->auth->username !== "admin") {
+        if ($this->hasRole($request, "LISTE_VEHICULES")) {
             $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
             $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
             $current = $request->get("current") ? $request->get("current") : 1;
@@ -170,6 +170,7 @@ class CarController extends Controller
                     "groups.name as groupName",
                     "car_user.user_id",
                     "clients.designation as client",
+                    "clients.id as clientId",
                     "checklists.date_checklist",
                     "cars.id as id",
                     "decharges.id as decharges.id",
@@ -180,8 +181,10 @@ class CarController extends Controller
                     "car_states.name as state",
                     "car_states.state_date",
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
+                    "drivers.id as driversId"
                 ])
                 ->where('matricule', 'like', "%{$request->get("matricule")}%")
+                ->where('car_user.user_id', '=', $request->auth->id)
                 ->orderBy($sortBy, $sort)
                 ->paginate(
                     $pageSize, // per page (may be get it from request)
@@ -190,126 +193,63 @@ class CarController extends Controller
                     $current // current page, default 1
                 );
             return $data;
-        } else {
-            $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
-            $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
-            $current = $request->get("current") ? $request->get("current") : 1;
-            $pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
-            return DB::table("cars")
-                ->leftJoin('car_states', function ($join) {
-                    $join->on('cars.id', '=', 'car_states.car_id')
-                        ->on('car_states.id', '=', DB::raw("(select max(id) from car_states WHERE car_states.car_id = cars.id)"));
-                })
-                ->leftJoin('checklists', function ($join) {
-                    $join->on('cars.id', '=', 'checklists.car_id')
-                        ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.car_id = cars.id)"));
-                })
-                ->leftJoin("restititions", "checklists.id", "=", "restititions.checklist_id")
-                ->leftJoin("decharges", "decharges.id", "=", "checklists.decharge_id")
-                ->leftJoin("drivers", "drivers.id", "=", "checklists.driver_id")
-                ->leftJoin("clients", "clients.id", "=", "decharges.client_id")
-                ->leftJoin("car_group", "car_group.car_id", "=", "cars.id")
-                ->leftJoin("groups", "car_group.group_id", "=", "groups.id")
-                ->select([
-                    "groups.name as groupName",
-                    "clients.designation as client",
-                    "checklists.date_checklist",
-                    "cars.id as id",
-                    "decharges.id as decharges.id",
-                    "cars.matricule",
-                    "cars.genre",
-                    "cars.marque",
-                    "cars.code_gps",
-                    "car_states.name as state",
-                    "car_states.state_date",
-                    "date_restitition",
-                    DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
-                ])
-                ->where('matricule', 'like', "%{$request->get("matricule")}%")
-                ->orderBy($sortBy, $sort)
-                ->paginate(
-                    $pageSize, // per page (may be get it from request)
-                    ['*'], // columns to select from table (default *, means all fields)
-                    'page', // page name that holds the page number in the query string
-                    $current // current page, default 1
-                );
         }
+
+        return $this->http_unauthorized();
     }
 
     function create(Request $request)
-    {
-        $has_role = true;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name === "ADD_EDIT_CARS") {
-                $has_role = true;
-            }
+{
+    if ($this->hasRole($request, "AJOUTER_VEHICULE")) {
+        $this->checkValidation($request, [
+            'matricule' => 'required',
+        ]);
+        $car = new Car;
+        $car->matricule = $request->matricule;
+        $car->prop = $request->prop;
+        $car->old_matricule = $request->old_matricule;
+        $car->color = $request->color;
+        $car->code_gps = $request->code_gps;
+        $car->genre = $request->genre;
+        $car->marque = $request->marque;
+        $car->type =  $request->type;
+        $car->puissance =  $request->puissance;
+        $car->energie = $request->energie;
+        $car->carrosserie = $request->carrosserie;
+        $car->createdby_id = $request->auth->id;
+        try {
+            $car->save();
+        } catch (QueryException $e) {
+            return $this->http_bad();
         }
-        if ($has_role) {
-            $this->validate($request, [
-                'matricule' => 'required',
-            ]);
-            $car = new Car;
-            $car->matricule = $request->matricule;
-            $car->prop = $request->prop;
-            $car->old_matricule = $request->old_matricule;
-            $car->color = $request->color;
-            $car->code_gps = $request->code_gps;
-            $car->genre = $request->genre;
-            $car->marque = $request->marque;
-            $car->type =  $request->type;
-            $car->puissance =  $request->puissance;
-            $car->energie = $request->energie;
-            $car->carrosserie = $request->carrosserie;
-            $car->createdby_id = $request->auth->id;
-            try {
-                $car->save();
-            } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
-            }
-            return new JsonResponse([
-                'message' => 'Success',
-                'data' => $car
-            ], Response::HTTP_CREATED);
-        }
-        return new JsonResponse([
-            'message' => 'Permission denied'
-        ], Response::HTTP_UNAUTHORIZED);
+        return $this->http_ok($car);
     }
+    return $this->http_unauthorized();
+}
 
     function delete($id, Request $request)
     {
-        try {
-            Car::findOrFail($id);
-        } catch (Exception $e) {
-            return new JsonResponse([
-                'message' => 'Id d\'ont exist',
-            ], Response::HTTP_BAD_REQUEST);
+        if ($this->hasRole($request, "SUPPRIMER_VEHICULE")) {
+            try {
+                Car::find($id);
+            } catch (Exception $e) {
+                return $this->http_not_found();
+            }
+            Car::destroy($id);
+            return $this->http_ok();
         }
-        Car::destroy($id);
-        return new JsonResponse([
-            'message' => 'Deleted'
-        ]);
+        return $this->http_unauthorized();
     }
 
     function update($id, Request $request)
     {
         try {
-            $car = Car::findOrFail($id);
+            $car = Car::find($id);
         } catch (Exception $e) {
-            return new JsonResponse([
-                'message' => 'Id d\'ont exist',
-            ], Response::HTTP_BAD_REQUEST);
+            return $this->http_not_found();
         }
-        $has_role = true;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name === "ADD_EDIT_CARS") {
-                $has_role = true;
-            }
-        }
-        if ($has_role) {
-            $this->validate($request, [
+        if ($this->hasRole($request, "MODIFIER_VEHICULE")) {
+            $this->checkValidation($request, [
                 'matricule' => 'required',
             ]);
             $car->matricule = $request->matricule;
@@ -327,21 +267,15 @@ class CarController extends Controller
             try {
                 $car->save();
             } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
+                return $this->http_bad();
             }
-            return new JsonResponse([
-                'message' => 'Success',
-                'data' => $car
-            ], Response::HTTP_CREATED);
+            return $this->http_ok($car);
         }
-        return new JsonResponse([
-            'message' => 'Permission denied'
-        ], Response::HTTP_UNAUTHORIZED);
+        return $this->http_unauthorized();
     }
 
-    public function dashboard_vl(Request $request)
+
+    function dashboard_vl(Request $request)
     {
         $capacity_logistics_vl = DB::table("cars")
             ->join("car_group", "cars.id", "=", "car_group.car_id")
@@ -382,38 +316,40 @@ class CarController extends Controller
 
 
         $affecte_vl = DB::table("cars")
-        ->join("car_group", "cars.id", "=", "car_group.car_id")
-        ->join("groups", "groups.id", "=", "car_group.group_id")
-        ->join('checklists', function ($join) {
-            $join->on('cars.id', '=', 'checklists.car_id')
-                ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.car_id = cars.id)"));
-        })
-        ->join("decharges", "decharges.id", "=", "checklists.decharge_id")
-        ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
-        ->select([
-            "groups.name"
-        ])
-        ->where("groups.name", "=", "LEGER")
-        ->count();
+            ->join("car_group", "cars.id", "=", "car_group.car_id")
+            ->join("groups", "groups.id", "=", "car_group.group_id")
+            ->join('checklists', function ($join) {
+                $join->on('cars.id', '=', 'checklists.car_id')
+                    ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.car_id = cars.id)"));
+            })
+            ->join("decharges", "decharges.id", "=", "checklists.decharge_id")
+            ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
+            ->select([
+                "groups.name"
+            ])
+            ->where("groups.name", "=", "LEGER")
+            ->count();
 
         $operationel_vl = $capacity_logistics_vl - $accedente_v - $en_panne_vl;
-        
+
         $non_exploite_vl = $operationel_vl - $affecte_vl;
 
-        return $this->success([
+        return $this->http_ok([
             "capacity_logistics_vl" => $capacity_logistics_vl,
             "en_panne_vl" => $en_panne_vl,
             "accedente_v" => $accedente_v,
             "affecte_vl" => $affecte_vl,
             "operationel_vl" => $operationel_vl,
             "non_exploite_vl" => $non_exploite_vl,
-        ], "Success");
+        ]);
     }
-    public function export(Request $request)
+
+    function export(Request $request)
     {
         return Excel::download(new CarsExport, 'etat_vehicules.xlsx');
     }
-    public function import(Request $request)
+
+    function import(Request $request)
     {
         //dump($request);
         if ($request->hasFile('cars')) {
@@ -427,4 +363,5 @@ class CarController extends Controller
             'message' => 'Fichier non trouvé'
         ], Response::HTTP_BAD_REQUEST);
     }
+    
 }

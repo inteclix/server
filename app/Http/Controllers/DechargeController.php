@@ -453,8 +453,8 @@ class DechargeController extends Controller
                 $n->url = "/cars_state/";
                 $n->from_id = $request->auth->id;
                 $n->to_id = $user->id;
-                $n->type = "car_state";
-                $n->type_id = $c->id;
+                $n->type = "car_state_restitution";
+                $n->type_id = $restitition->id;
                 try {
                     $n->save();
                 } catch (QueryException $e) {
@@ -472,6 +472,10 @@ class DechargeController extends Controller
         if ($ch->createdby_id === $request->auth->id) {
             $r->delete();
             $ch->delete();
+            $ns = Notification::where("type", "=", "car_state_restitution")->where("type_id", "=", $id)->get()->all();
+            foreach ($ns as $n) {
+                $n->delete();
+            }
             return $this->success([], "Bien supprimer");
         }
         return $this->error("Non supprimer");

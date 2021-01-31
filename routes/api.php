@@ -31,8 +31,8 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
     ]);
 
     $router->get('/auth/users/search', [
-        'uses' => 'AuthController@search',
-        'as' => 'api.auth.search'
+        'uses' => 'AuthController@searchUsers',
+        'as' => 'api.auth.searchUsers'
     ]);
     $router->get('/auth/me', [
         'uses' => 'AuthController@me',
@@ -51,17 +51,17 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
 
     $router->post('/auth/users', [
         'uses' => 'AuthController@createUser',
-        'as' => 'api.auth.create'
+        'as' => 'api.auth.createUser'
     ]);
 
     $router->post('/auth/users/delete/{id}', [
-        'uses' => 'AuthController@delete',
-        'as' => 'api.auth.delete'
+        'uses' => 'AuthController@deleteUser',
+        'as' => 'api.auth.deleteUser'
     ]);
 
     $router->put('/auth/users/{id}', [
-        'uses' => 'AuthController@update',
-        'as' => 'api.auth.update'
+        'uses' => 'AuthController@updateUser',
+        'as' => 'api.auth.updateUser'
     ]);
 
     $router->post('/auth/users/roles', [
@@ -117,8 +117,8 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
 
     // cars
     $router->get('/cars/decharges/{car_id}', [
-        'uses' => 'CarController@getDechargeHistory',
-        'as' => 'api.cars.getDechargeHistory'
+        'uses' => 'CarController@getDecharges',
+        'as' => 'api.cars.getDecharges'
     ]);
     $router->get('/cars/search', [
         'uses' => 'CarController@search',
@@ -151,8 +151,8 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
     ]);
 
     $router->get('/cars', [
-        'uses' => 'CarController@getAll',
-        'as' => 'api.cars.getAll'
+        'uses' => 'CarController@getAllUserCars',
+        'as' => 'api.cars.getAllUserCars'
     ]);
     $router->get('/allcars', [
         'uses' => 'CarController@getAllCars',
@@ -392,6 +392,7 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
         'as' => 'api.state.dowloadroles'
     ]);
 
+    // dashboard data
     $router->get('/dashboard_vl', [
         'uses' => 'CarController@dashboard_vl',
         'as' => 'api.cars.dashboard_vl'
