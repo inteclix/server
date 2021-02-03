@@ -377,7 +377,7 @@ class DechargeController extends Controller
         try {
             $checklist->save();
         } catch (QueryException $e) {
-            return $this->error("Error !");
+            return $this->http_bad();
         }
     }
 
@@ -413,7 +413,7 @@ class DechargeController extends Controller
         } catch (QueryException $e) {
             $checklist->delete();
             //dump($e);
-            return $this->error("Error !");
+            return $this->http_bad();
         }
         $restitition = new Restitition;
         $restitition->decharge_id = $id;
@@ -425,9 +425,7 @@ class DechargeController extends Controller
             $restitition->save();
         } catch (QueryException $e) {
             $restitition->delete();
-
-            // dump($e);
-            return $this->error("Error !");
+            return $this->http_bad();
         }
         if ($restitition->motif_restitition === "REMPLACEMENT VEHICULE (VEHICULE EN PANNE)") {
             $c = new CarState;
@@ -439,7 +437,7 @@ class DechargeController extends Controller
             try {
                 $c->save();
             } catch (QueryException $e) {
-                return $this->error("Error");
+                return $this->http_bad();
             }
             $car = Car::find($request->car_id);
             $users = $car->users()->get();

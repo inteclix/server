@@ -11,6 +11,7 @@ use Exception;
 
 use App\Client;
 use App\Imports\ClientsImport;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -51,37 +52,38 @@ class ClientController   extends Controller
 
     function getAll(Request $request)
     {
-        $has_role = true;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name === "ADD_EDIT_CLIENTS") {
-                $has_role = true;
-            }
-        }
-        if ($has_role) {
-            $all = Client::with('client')->get();
-            return new JsonResponse([
-                'message' => 'Success get all',
-                'data' => $all !== NULL ? $all : []
-            ], Response::HTTP_OK);
-        } else {
-            return new JsonResponse([
-                'message' => 'UNAUTHORIZED',
-                'data' => []
-            ], Response::HTTP_UNAUTHORIZED);
-        }
+        $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
+        $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
+        $current = $request->get("current") ? $request->get("current") : 1;
+        $pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
+        return $this->http_ok(
+            DB::table("clients")
+                ->leftJoin("clients AS clients_h", "clients.client_id", "=", "clients_h.id")
+                ->select([
+                    "clients.id as id",
+                    "clients.code as code",
+                    "clients.designation as designation",
+                    "clients.localite as localite",
+                    "clients.tel as tel",
+                    "clients_h.designation as client_h_designation"
+                ])
+              //  ->where('clients.code', 'like', "%{$request->get("code")}%")
+                ->where('clients.designation', 'like', "%{$request->get("designation")}%")
+                ->orderBy($sortBy, $sort)
+                ->paginate(
+                    $pageSize, // per page (may be get it from request)
+                    ['*'], // columns to select from table (default *, means all fields)
+                    'page', // page name that holds the page number in the query string
+                    $current // current page, default 1
+                )
+        );
     }
 
     function create(Request $request)
     {
         $has_role = true;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name === "ADD_EDIT_CLIENTS") {
-                $has_role = true;
-            }
-        }
         if ($has_role) {
             $this->validate($request, [
-                'code' => 'required',
                 'designation' => 'required',
             ]);
             $c = new Client;
@@ -94,9 +96,7 @@ class ClientController   extends Controller
             try {
                 $c->save();
             } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
+                return $this->http_bad();
             }
             return new JsonResponse([
                 'message' => 'Success',
@@ -149,7 +149,6 @@ class ClientController   extends Controller
         }
         if ($has_role) {
             $this->validate($request, [
-                'code' => 'required',
                 'designation' => 'required',
             ]);
             $c->code = $request->code;
@@ -161,9 +160,7 @@ class ClientController   extends Controller
             try {
                 $c->save();
             } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
+                return $this->http_bad();
             }
             return new JsonResponse([
                 'message' => 'Success',

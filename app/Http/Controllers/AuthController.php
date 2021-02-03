@@ -53,7 +53,7 @@ class AuthController extends Controller
     {
         $notifications = Notification::orderBy('id', 'desc')
             ->where('to_id', $request->auth->id)
-            ->take(10)->get()->all();;
+            ->take(5)->get()->all();;
         foreach ($notifications as $n) {
             $n->from = User::find($n->from_id);
         }
@@ -244,10 +244,14 @@ class AuthController extends Controller
 
     function setCars(Request $request)
     {
-        if ($this->hasRole($request, "UTILISATEURS_VEHICULES")) {
+        try {
             $user = User::find($request->user_id);
+        } catch (QueryException $e) {
+            return $this->http_not_found();
+        }
+        if ($this->hasRole($request, "UTILISATEURS_VEHICULES")) {
             $user->cars()->sync($request->cars_id);
-            $this->success([]);
+            return $this->http_ok();
         }
         return $this->http_unauthorized();
     }

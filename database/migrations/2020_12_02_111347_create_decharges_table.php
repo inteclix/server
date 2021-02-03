@@ -15,6 +15,14 @@ class CreateDechargesTable extends Migration
     {
         Schema::create('decharges', function (Blueprint $table) {
             $table->increments('id');
+            $table->integer('createdby_id')->unsigned();
+            $table->foreign('createdby_id')->references('id')->on('users')
+                ->onDelete('restrict')
+                ->onUpdate('restrict');
+            $table->integer('acceptedby_id')->unsigned()->nullable();
+            $table->foreign('acceptedby_id')->references('id')->on('users')
+                ->onDelete('restrict')
+                ->onUpdate('restrict');
             $table->integer('client_id')->unsigned();
             $table->foreign('client_id')->references('id')->on('clients')
                 ->onDelete('restrict')

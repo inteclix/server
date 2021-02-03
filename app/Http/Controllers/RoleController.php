@@ -96,9 +96,7 @@ class RoleController extends Controller
                 try {
                     $Role->save();
                 } catch (QueryException $e) {
-                    return new JsonResponse([
-                        'message' => 'Sql exception' . $e
-                    ], Response::HTTP_BAD_REQUEST);
+                    return $this->http_bad();
                 }
                 return new JsonResponse([
                     'message' => 'Success update Role',
@@ -133,9 +131,7 @@ class RoleController extends Controller
                 try {
                     $Role->save();
                 } catch (QueryException $e) {
-                    return new JsonResponse([
-                        'message' => 'Sql exception' . $e
-                    ], Response::HTTP_BAD_REQUEST);
+                    return $this->http_bad();
                 }
                 return new JsonResponse([
                     'message' => 'Success update Role',
@@ -170,9 +166,7 @@ class RoleController extends Controller
                 try {
                     $Role->save();
                 } catch (QueryException $e) {
-                    return new JsonResponse([
-                        'message' => 'Sql exception' . $e
-                    ], Response::HTTP_BAD_REQUEST);
+                    return $this->http_bad();
                 }
                 return new JsonResponse([
                     'message' => 'Success update Role',

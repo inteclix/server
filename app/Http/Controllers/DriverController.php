@@ -52,24 +52,22 @@ class DriverController extends Controller
 
     function getAll(Request $request)
     {
-        $has_role = true;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name === "ADD_EDIT_DRIVERS") {
-                $has_role = true;
-            }
-        }
-        if ($has_role) {
-            $all = Driver::all();
-            return new JsonResponse([
-                'message' => 'Success get all',
-                'data' => $all !== NULL ? $all : []
-            ], Response::HTTP_OK);
-        } else {
-            return new JsonResponse([
-                'message' => 'UNAUTHORIZED',
-                'data' => []
-            ], Response::HTTP_UNAUTHORIZED);
-        }
+        $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
+        $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
+        $current = $request->get("current") ? $request->get("current") : 1;
+        $pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
+        return $this->http_ok(
+            Driver::orderBy($sortBy, $sort)
+                ->where('firstname', 'like', "%{$request->get("firstname")}%")
+                ->where('lastname', 'like', "%{$request->get("lastname")}%")
+              //  ->where('code_paie', 'like', "%{$request->get("code_paie")}%")
+                ->paginate(
+                    $pageSize, // per page (may be get it from request)
+                    ['*'], // columns to select from table (default *, means all fields)
+                    'page', // page name that holds the page number in the query string
+                    $current // current page, default 1
+                )
+        );
     }
 
     function create(Request $request)
@@ -84,22 +82,18 @@ class DriverController extends Controller
             $this->validate($request, [
                 'firstname' => 'required',
                 'lastname' => 'required',
-                'tel' => 'required',
-                'code_paie' => 'required',
             ]);
             $c = new Driver;
             $c->firstname = $request->firstname;
             $c->lastname = $request->lastname;
             $c->tel = $request->tel;
-            ($c->request === 0 || $c->request === "0") ? $c->code_paie = null : $c->code_paie = $request->code_paie;
+            $c->code_paie = $request->code_paie;
             $c->type = $request->type;
             $c->createdby_id = $request->auth->id;
             try {
                 $c->save();
             } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
+                return $this->http_bad();
             }
             return new JsonResponse([
                 'message' => 'Success',
@@ -158,21 +152,17 @@ class DriverController extends Controller
             $this->validate($request, [
                 'firstname' => 'required',
                 'lastname' => 'required',
-                'tel' => 'required',
-                'code_paie' => 'required',
             ]);
             $c->firstname = $request->firstname;
             $c->lastname = $request->lastname;
             $c->tel = $request->tel;
-            ($c->request === 0 || $c->request === "0") ? $c->code_paie = null : $c->code_paie = $request->code_paie;
+            $c->code_paie = $request->code_paie;
             $c->type = $request->type;
             $c->createdby_id = $request->auth->id;
             try {
                 $c->save();
             } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
+                return $this->http_bad();
             }
             return new JsonResponse([
                 'message' => 'Success',

@@ -96,7 +96,7 @@ class CarStateController extends Controller
             try {
                 $c->save();
             } catch (QueryException $e) {
-                return $this->error("Error");
+                return $this->http_bad();
             }
             $car = Car::find($request->car_id);
             $users = $car->users()->get();
@@ -171,9 +171,8 @@ class CarStateController extends Controller
             try {
                 $c->save();
             } catch (QueryException $e) {
-                return new JsonResponse([
-                    'message' => $e
-                ], Response::HTTP_BAD_REQUEST);
+                return $this->http_bad();
+
             }
             return new JsonResponse([
                 'message' => 'Success',
