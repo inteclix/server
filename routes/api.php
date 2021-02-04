@@ -320,10 +320,20 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
         'as' => 'api.decharges.get'
     ]);
 
+    $router->put('/decharges/{id}', [
+        'uses' => 'DechargeController@update',
+        'as' => 'api.decharges.update'
+    ]);
+
 
     $router->post('/decharges/delete/{id}', [
         'uses' => 'DechargeController@deleteDecharge',
         'as' => 'api.decharges.deleteDecharge'
+    ]);
+
+    $router->post('/decharges/accepte/{id}', [
+        'uses' => 'DechargeController@accepteDecharge',
+        'as' => 'api.decharges.accepteDecharge'
     ]);
 
     $router->post('/decharges/', [

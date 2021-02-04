@@ -67,10 +67,10 @@ class Controller extends BaseController
         ], Response::HTTP_OK);
     }
     //
-    function http_unauthorized()
+    function http_unauthorized($message = "Vous ñ'avez pas l'autorisation")
     {
         return new JsonResponse([
-            'message' => "Vous ñ'avez pas l'autorisation"
+            'message' => $message
         ], Response::HTTP_UNAUTHORIZED);
     }
 

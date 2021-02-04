@@ -25,6 +25,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use PhpParser\Node\Stmt\TryCatch;
 use App\CarState;
+
 class DechargeController extends Controller
 {
 
@@ -170,7 +171,8 @@ class DechargeController extends Controller
             $decharges = $decharges->join("car_user", "cars.id", "car_user.car_id")
                 ->join("users as owners", "car_user.user_id", "=", "owners.id");
         }
-        $decharges = $decharges->join("users", "checklists.createdby_id", "=", "users.id")
+        $decharges = $decharges->join("users as creates", "checklists.createdby_id", "=", "creates.id");
+        $decharges = $decharges->leftJoin("users as acceptes", "decharges.acceptedby_id", "=", "acceptes.id")
             ->join("drivers", "checklists.driver_id", "=", "drivers.id");
         if ($request->auth->username !== "admin") {
             $decharges = $decharges->select([
@@ -183,7 +185,8 @@ class DechargeController extends Controller
                 'designation as clients.designation',
                 'decharges.date_decharge as date_decharge',
                 'date_fin_prestation',
-                'users.username as username',
+                'creates.username as createdby_username',
+                'acceptes.username as acceptedby_username',
                 'owners.id as ownerId'
             ])
                 ->orderBy($sortBy, $sort)
@@ -199,7 +202,8 @@ class DechargeController extends Controller
                 'designation as clients.designation',
                 'decharges.date_decharge as date_decharge',
                 'date_fin_prestation',
-                'users.username as username',
+                'creates.username as createdby_username',
+                'acceptes.username as acceptedby_username',
             ])->orderBy($sortBy, $sort);;
         }
 
@@ -294,7 +298,6 @@ class DechargeController extends Controller
     function get($id, Request $request)
     {
         $decharge = DB::table("decharges")
-
             ->join('clients', 'decharges.client_id', '=', 'clients.id')
             ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
             ->join("checklists", "decharges.id", "=", "checklists.decharge_id")
@@ -311,6 +314,7 @@ class DechargeController extends Controller
                 'users.username as users.username',
                 DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                 'cars.id as cars.id',
+                'cars.id as car_id',
                 'marque as cars.marque',
                 'matricule as cars.matricule',
                 'code_gps as cars.code_gps',
@@ -335,11 +339,15 @@ class DechargeController extends Controller
                 'pochette_cle',
                 'cle_vehicule',
                 'checklists.observation as observation_checklist',
+                'checklists.date_checklist as date_checklist',
                 'drivers.id as drivers.id',
+                'drivers.id as driver_id',
                 'drivers.firstname as drivers.firstname',
                 'drivers.lastname as drivers.lastname',
                 'drivers.tel as drivers.tel',
                 'designation as clients.designation',
+                'clients.id as client_id',
+                'clients.id as clients.id'
             ])
             ->where('decharges.id', '=', $id)
             ->orderBy('checklists.id', 'DESC')
@@ -353,8 +361,105 @@ class DechargeController extends Controller
             $d->restitition = Restitition::find($d->restititions_id)->with("checklist")->get()->all()[0];
             //dump($r);
         }
+        $d->client = Client::find($d->client_id);
+        $d->car = Car::find($d->car_id);
+        $d->driver = Driver::find($d->driver_id);
         $d->checklists = Decharge::find($id)->checklists()->with('driver')->with('car')->get();
-        return $this->success($d);
+        return $this->http_ok($d);
+    }
+
+    function accepteDecharge(Request $request, $id)
+    {
+        try {
+            $decharge = Decharge::find($id);
+        } catch (QueryException $e) {
+            return $this->http_bad();
+        }
+        if ($this->hasRole($request, "VALIDER_DECHARGE")) {
+            $decharge->acceptedby_id = $request->auth->id;
+            try {
+                $decharge->save();
+            } catch (QueryException $e) {
+                return $this->http_bad();
+            }
+            return $this->http_ok($decharge);
+        }
+        return $this->http_unauthorized();
+    }
+
+    function update(Request $request, $id)
+    {
+        $this->validate($request, [
+            "client_id" => "required",
+            "car_id" => "required",
+            "date_decharge" => "required",
+            "driver_id" => "required",
+            "niveau_carburant" => "required",
+            "odometre" =>  "required",
+            "starts" => "required",
+            "cle_vehicule" => "required",
+        ]);
+        try {
+            $decharge = Decharge::find($id);
+        } catch (QueryException $e) {
+            return $this->http_bad();
+        }
+        if ($this->hasRole($request, "MODIFIER_DECHARGE")) {
+            // verifier if decharge has one checklist
+            $checklists = $decharge->checklists()->get();
+            if (count($checklists) == 1) {
+                $checklist = $checklists[0];
+                if ($request->auth->id !== $checklist->createdby_id) {
+                    return $this->http_unauthorized();
+                }
+                // update decharge
+                $decharge->client_id = $request->client_id;
+                $decharge->date_decharge = $request->date_decharge;
+                $decharge->date_fin_prestation = $request->date_fin_prestation;
+                $decharge->acceptedby_id = null;
+                try {
+                    $decharge->save();
+                } catch (QueryException $e) {
+                    return $this->http_bad();
+                }
+
+                // update checklist
+
+                $checklist->car_id = $request->car_id;
+                $checklist->driver_id = $request->driver_id;
+                //$checklist->updatedby_id = $request->auth->id;
+                $checklist->niveau_carburant = $request->niveau_carburant;
+                $checklist->odometre = $request->odometre;
+                $checklist->starts = $request->starts;
+                $checklist->carte_grise = $request->carte_grise;
+                $checklist->assurance = $request->assurance;
+                $checklist->scanner = $request->scanner;
+                $checklist->permis_circuler = $request->permis_circuler;
+                $checklist->carnet_enter = $request->carnet_enter;
+                $checklist->vignette = $request->vignette;
+                $checklist->carte_gpl = $request->carte_gpl;
+                $checklist->gillet = $request->gillet;
+                $checklist->roue_secour = $request->roue_secour;
+                $checklist->cric = $request->cric;
+                $checklist->poste_radio = $request->poste_radio;
+                $checklist->cle_roue = $request->cle_roue;
+                $checklist->extincteur = $request->extincteur;
+                $checklist->boite_pharm = $request->boite_pharm;
+                $checklist->triangle = $request->triangle;
+                $checklist->pochette_cle = $request->pochette_cle;
+                $checklist->cle_vehicule = $request->cle_vehicule;
+                $checklist->date_checklist = $request->date_checklist;
+                $checklist->observation = $request->observation_checklist;
+                try {
+                    $checklist->save();
+                } catch (QueryException $e) {
+                    return $this->http_bad();
+                }
+                return $this->http_ok($decharge);
+            }
+            return $this->http_unauthorized("On peut pas modifier ce décharge");
+        }
+        return $this->http_unauthorized();
     }
 
     function addChecklist(Request $request, $id)
