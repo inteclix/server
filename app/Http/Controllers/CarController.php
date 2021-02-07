@@ -184,6 +184,7 @@ class CarController extends Controller
                     "drivers.id as driversId"
                 ])
                 ->where('matricule', 'like', "%{$request->get("matricule")}%")
+                ->where('code_gps', 'like', "%{$request->get("code_gps")}%")
                 ->where('car_user.user_id', '=', $request->auth->id)
                 ->orderBy($sortBy, $sort)
                 ->paginate(

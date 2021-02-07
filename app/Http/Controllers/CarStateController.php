@@ -17,13 +17,14 @@ class CarStateController extends Controller
 {
     function get($id, Request $request)
     {
-        if ($this->hasRole($request, "STATUS_VEHICULES")) {
+        if ($this->hasRole($request, "MODIFIER_STATUS_VEHICULE")) {
 
             try {
-                $carState = CarState::find($id)->with("car")->get()->first();
+                $carState = CarState::find($id);
             } catch (Exception $e) {
                 return $this->http_not_found();
             }
+            $carState->car = Car::find($carState->car_id);
             return $this->http_ok($carState);
         }
         return $this->http_unauthorized();
@@ -52,16 +53,18 @@ class CarStateController extends Controller
                 ->join('users', 'users.id', '=', 'car_states.createdby_id')
                 ->join('car_user', 'cars.id', '=', 'car_user.car_id')
                 ->select([
-                    "users.username as createdby",
-                    "car_states.id as id",
                     "cars.matricule",
                     "cars.code_gps",
+                    "car_states.id as id",
                     "car_states.name",
                     "car_states.state_date",
+                    "car_states.observation",
+                    "users.username as createdby",
                     "car_user.user_id as car_user.user_id"
                 ])
                 ->orderBy($sortBy, $sort)
                 ->where('cars.matricule', 'like', "%{$request->get("matricule")}%")
+                ->where('code_gps', 'like', "%{$request->get("code_gps")}%")
                 ->where('car_user.user_id', '=', $auth_id)
                 ->paginate(
                     $pageSize, // per page (may be get it from request)
@@ -147,40 +150,26 @@ class CarStateController extends Controller
     function update($id, Request $request)
     {
         try {
-            $c = CarState::findOrFail($id);
+            $c = CarState::find($id);
         } catch (Exception $e) {
-            return new JsonResponse([
-                'message' => 'Id d\'ont exist',
-            ], Response::HTTP_BAD_REQUEST);
+            return $this->http_bad();
         }
-        $has_role = true;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name === "ADD_EDIT_CLIENTS") {
-                $has_role = true;
-            }
-        }
-        if ($has_role) {
-            $this->validate($request, [
-                'code' => 'required',
-                'designation' => 'required',
+
+        if ($this->hasRole($request, "MODIFIER_STATUS_VEHICULE") && $c->createdby_id === $request->auth->id) {
+            $this->checkValidation($request, [
+                'name' => 'required',
+                'state_date' => 'required',
             ]);
-            $c->code = $request->code;
-            $c->designation = $request->designation;
-            $c->carState_id = $request->carState_id;
-            $c->createdby_id = $request->auth->id;
+            $c->name = $request->name;
+            $c->state_date = $request->state_date;
+            $c->observation = $request->observation;
             try {
                 $c->save();
             } catch (QueryException $e) {
                 return $this->http_bad();
-
             }
-            return new JsonResponse([
-                'message' => 'Success',
-                'data' => $c
-            ], Response::HTTP_CREATED);
+            return $this->http_ok($c);
         }
-        return new JsonResponse([
-            'message' => 'Permission denied'
-        ], Response::HTTP_UNAUTHORIZED);
+        return $this->http_unauthorized();
     }
 }
