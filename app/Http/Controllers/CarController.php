@@ -149,7 +149,7 @@ class CarController extends Controller
             $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
             $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
             $current = $request->get("current") ? $request->get("current") : 1;
-            $pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
+            $pageSize = $request->get("pageSize") ? $request->get("pageSize") : 10;
             $data = DB::table("cars")
                 ->leftJoin('car_states', function ($join) {
                     $join->on('cars.id', '=', 'car_states.car_id')
@@ -176,6 +176,7 @@ class CarController extends Controller
                     "decharges.id as decharges.id",
                     "cars.matricule",
                     "cars.genre",
+                    "checklists.odometre",
                     "cars.marque",
                     "cars.code_gps",
                     "car_states.name as state",
@@ -194,9 +195,6 @@ class CarController extends Controller
                     'page', // page name that holds the page number in the query string
                     $current // current page, default 1
                 );
-            if ($request->get("type_request") == "excel") {
-                return Excel::download(new CollectionsExport($data), 'etat_vehicules.xlsx');
-            }
             return $data;
         }
 

@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 use Illuminate\Database\QueryException;
 use App\User;
+use Illuminate\Support\Facades\DB;
 
 class AuthController extends Controller
 {
@@ -51,14 +52,37 @@ class AuthController extends Controller
 
     function getNotifications(Request $request)
     {
-        $notifications = Notification::orderBy('id', 'desc')
-            ->where('to_id', $request->auth->id)
-            ->take(5)->get()->all();;
-        foreach ($notifications as $n) {
-            $n->from = User::find($n->from_id);
-        }
-        return $this->http_ok($notifications ? $notifications : []);
-        
+        $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
+        $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
+        $current = $request->get("current") ? $request->get("current") : 1;
+        $pageSize = $request->get("pageSize") ? $request->get("pageSize") : 10;
+        $notifications = DB::table("notifications")
+            ->join("users as users_to", "users_to.id", "=", "notifications.to_id")
+            ->join("users as users_from", "users_from.id", "=", "notifications.from_id")
+            ->select([
+                "notifications.id as id",
+                "title",
+                "sub_title",
+                "url",
+                "is_read",
+                "notifications.created_at",
+                "notifications.updated_at",
+                "type",
+                "users_to.username as username_to",
+                "users_from.username as username_from"
+            ])
+            ->where("users_to.username", "=", $request->auth->username)
+           // ->where("title", "=", "%{$request->get("title")}%")
+            //->where("sub_title", "=", "%{$request->get("sub_title")}%")
+            ->orderBy($sortBy, $sort)
+            ->paginate(
+                $pageSize, // per page (may be get it from request)
+                ['*'], // columns to select from table (default *, means all fields)
+                'page', // page name that holds the page number in the query string
+                $current // current page, default 1
+            );
+
+        return $notifications;
     }
 
     function makeNotificationAsRead($id, Request $request)
@@ -79,12 +103,12 @@ class AuthController extends Controller
 
     function searchUsers(Request $request)
     {
-        if($this->hasRole($request, "LISTE_UTILISATEURS")){
+        if ($this->hasRole($request, "LISTE_UTILISATEURS")) {
             $users = User::where('firstname', 'like', "%{$request->data}%")
-            ->orWhere('lastname', 'like', "%{$request->data}%")
-            ->take(8)
-            ->get()->all();
-            return $this->http_ok($users ? $users: []);
+                ->orWhere('lastname', 'like', "%{$request->data}%")
+                ->take(8)
+                ->get()->all();
+            return $this->http_ok($users ? $users : []);
         }
         return $this->http_unauthorized();
     }
@@ -212,7 +236,7 @@ class AuthController extends Controller
         } catch (QueryException $e) {
             return $this->http_not_found();
         }
-        if($this->hasRole($request, "UTILISATEURS_ROLES")){
+        if ($this->hasRole($request, "UTILISATEURS_ROLES")) {
             $roles = $user->roles()->get();
             return $this->http_ok($roles);
         }
@@ -234,8 +258,7 @@ class AuthController extends Controller
         } catch (QueryException $e) {
             return $this->http_not_found();
         }
-        if ($this->hasRole($request, "UTILISATEURS_VEHICULES")) 
-        {
+        if ($this->hasRole($request, "UTILISATEURS_VEHICULES")) {
             $cars = $user->cars()->get()->all();
             return $this->success($cars);
         }
