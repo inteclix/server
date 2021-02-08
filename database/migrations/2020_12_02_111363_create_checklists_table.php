@@ -34,27 +34,28 @@ class CreateChecklistsTable extends Migration
             $table->dateTime('date_checklist');
 
             // status vehicule
-            $table->integer("niveau_carburant"); // 1 to 100
-            $table->integer("odometre"); // odometre 
-            $table->integer("starts"); // etat de vehicule ***** five start
+            $table->integer("niveau_carburant")->nullable(); // 1 to 100
+            $table->integer("odometre")->nullable(); // odometre 
+            $table->integer("starts")->nullable(); // etat de vehicule ***** five start
             // documents
-            $table->boolean("carte_grise");
-            $table->boolean("assurance");
-            $table->boolean("scanner");
-            $table->boolean("permis_circuler");
-            $table->boolean("carnet_enter");
-            $table->boolean("vignette");
-            $table->boolean("carte_gpl");
+            $table->boolean("carte_grise")->nullable();
+            $table->boolean("assurance")->nullable();
+            $table->boolean("assurance_marchandises")->nullable();
+            $table->boolean("scanner")->nullable();
+            $table->boolean("permis_circuler")->nullable();
+            $table->boolean("carnet_enter")->nullable();
+            $table->boolean("vignette")->nullable();
+            $table->boolean("carte_gpl")->nullable();
             // equipments
-            $table->boolean("gillet");
-            $table->boolean("roue_secour");
-            $table->boolean("cric");
-            $table->boolean("poste_radio");
-            $table->boolean("cle_roue");
-            $table->boolean("extincteur");
-            $table->boolean("boite_pharm");
-            $table->boolean("triangle");
-            $table->boolean("pochette_cle");
+            $table->boolean("gillet")->nullable();
+            $table->boolean("roue_secour")->nullable();
+            $table->boolean("cric")->nullable();
+            $table->boolean("poste_radio")->nullable();
+            $table->boolean("cle_roue")->nullable();
+            $table->boolean("extincteur")->nullable();
+            $table->boolean("boite_pharm")->nullable();
+            $table->boolean("triangle")->nullable();
+            $table->boolean("pochette_cle")->nullable();
             $table->integer("cle_vehicule")->default(1); // double cle
             $table->string("observation")->nullable();
             // timestamps

@@ -9,7 +9,7 @@ use Illuminate\Validation\ValidationException;
 use Illuminate\Database\QueryException;
 use Exception;
 use App\Car;
-use App\Exports\CarsExport;
+use App\Exports\CollectionsExport;
 use App\Imports\CarsImport;
 use GrahamCampbell\ResultType\Success;
 use Illuminate\Support\Facades\DB;
@@ -186,6 +186,7 @@ class CarController extends Controller
                 ->where('matricule', 'like', "%{$request->get("matricule")}%")
                 ->where('code_gps', 'like', "%{$request->get("code_gps")}%")
                 ->where('car_user.user_id', '=', $request->auth->id)
+                // ->where('car_user.user_id', '=', $request->auth->id)
                 ->orderBy($sortBy, $sort)
                 ->paginate(
                     $pageSize, // per page (may be get it from request)
@@ -193,6 +194,9 @@ class CarController extends Controller
                     'page', // page name that holds the page number in the query string
                     $current // current page, default 1
                 );
+            if ($request->get("type_request") == "excel") {
+                return Excel::download(new CollectionsExport($data), 'etat_vehicules.xlsx');
+            }
             return $data;
         }
 
@@ -200,33 +204,33 @@ class CarController extends Controller
     }
 
     function create(Request $request)
-{
-    if ($this->hasRole($request, "AJOUTER_VEHICULE")) {
-        $this->checkValidation($request, [
-            'matricule' => 'required',
-        ]);
-        $car = new Car;
-        $car->matricule = $request->matricule;
-        $car->prop = $request->prop;
-        $car->old_matricule = $request->old_matricule;
-        $car->color = $request->color;
-        $car->code_gps = $request->code_gps;
-        $car->genre = $request->genre;
-        $car->marque = $request->marque;
-        $car->type =  $request->type;
-        $car->puissance =  $request->puissance;
-        $car->energie = $request->energie;
-        $car->carrosserie = $request->carrosserie;
-        $car->createdby_id = $request->auth->id;
-        try {
-            $car->save();
-        } catch (QueryException $e) {
-            return $this->http_bad();
+    {
+        if ($this->hasRole($request, "AJOUTER_VEHICULE")) {
+            $this->checkValidation($request, [
+                'matricule' => 'required',
+            ]);
+            $car = new Car;
+            $car->matricule = $request->matricule;
+            $car->prop = $request->prop;
+            $car->old_matricule = $request->old_matricule;
+            $car->color = $request->color;
+            $car->code_gps = $request->code_gps;
+            $car->genre = $request->genre;
+            $car->marque = $request->marque;
+            $car->type =  $request->type;
+            $car->puissance =  $request->puissance;
+            $car->energie = $request->energie;
+            $car->carrosserie = $request->carrosserie;
+            $car->createdby_id = $request->auth->id;
+            try {
+                $car->save();
+            } catch (QueryException $e) {
+                return $this->http_bad();
+            }
+            return $this->http_ok($car);
         }
-        return $this->http_ok($car);
+        return $this->http_unauthorized();
     }
-    return $this->http_unauthorized();
-}
 
     function delete($id, Request $request)
     {
@@ -347,7 +351,53 @@ class CarController extends Controller
 
     function export(Request $request)
     {
-        return Excel::download(new CarsExport, 'etat_vehicules.xlsx');
+        $cars = DB::table("cars")
+            ->leftJoin('car_states', function ($join) {
+                $join->on('cars.id', '=', 'car_states.car_id')
+                    ->on('car_states.id', '=', DB::raw("(select max(id) from car_states WHERE car_states.car_id = cars.id)"));
+            })
+            ->leftJoin('checklists', function ($join) {
+                $join->on('cars.id', '=', 'checklists.car_id')
+                    ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.car_id = cars.id)"));
+            })
+            ->leftJoin("restititions", "checklists.id", "=", "restititions.checklist_id")
+            ->leftJoin("decharges", "decharges.id", "=", "checklists.decharge_id")
+            ->leftJoin("drivers", "drivers.id", "=", "checklists.driver_id")
+            ->leftJoin("clients", "clients.id", "=", "decharges.client_id")
+            ->leftJoin("car_user", "car_user.car_id", "=", "cars.id")
+            ->leftJoin("car_group", "car_group.car_id", "=", "cars.id")
+            ->leftJoin("groups", "car_group.group_id", "=", "groups.id")
+            ->select([
+                "cars.code_gps",
+                "cars.matricule",
+                "cars.genre",
+                "cars.marque",
+                "groups.name as groupName",
+                "clients.designation as client",
+                "clients.tel as client_tel",
+                "decharges.date_decharge as date_decharge",
+                DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
+                "drivers.tel as drivers_tel",
+                "car_states.name as state",
+                "car_states.state_date as state_date",
+            ])
+            ->where("car_user.user_id", "=", $request->auth->id)
+            ->get();
+        $cars->prepend([
+            "code_gps" => "CODE GPS",
+            "matricule" => "MATRICULE",
+            "genre" => "GENRE",
+            "marque" => "MARQUE",
+            "groupName" => "GROUPE",
+            "client" => "CLIENT",
+            "client_tel" => "TEL CLIENT",
+            "date_decharge" => "DATE DECHARGE",
+            "drivers_fullname" => "CONDUCTEUR",
+            "drivers_tel" => "TEL CONDUCTEUR",
+            "state" => "STATUS",
+            "state_date" => "DATE STATUS"
+        ]);
+        return Excel::download(new CollectionsExport($cars), 'etat_vehicules.xlsx');
     }
 
     function import(Request $request)
@@ -364,5 +414,4 @@ class CarController extends Controller
             'message' => 'Fichier non trouvé'
         ], Response::HTTP_BAD_REQUEST);
     }
-    
 }

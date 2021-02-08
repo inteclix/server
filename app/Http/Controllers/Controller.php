@@ -12,13 +12,18 @@ class Controller extends BaseController
     // return a boolean if user has role
     function hasRole($request, $roleName)
     {
-        $has_role = false;
-        foreach ($request->auth->roles as $role) {
-            if ($role->name == $roleName) {
-                $has_role = true;
+        //dd($request->auth->username === "admin");
+        if ($request->auth->username === "admin") {
+            return true;
+        } else {
+            $has_role = false;
+            foreach ($request->auth->roles as $role) {
+                if ($role->name == $roleName) {
+                    $has_role = true;
+                }
             }
+            return $has_role;
         }
-        return $has_role;
     }
 
     // return a boolean if user->username = "admin"

@@ -40,6 +40,7 @@ class DechargeController extends Controller
         $checklist->starts = $request->starts;
         $checklist->carte_grise = $request->carte_grise;
         $checklist->assurance = $request->assurance;
+        $checklist->assurance_marchandises = $request->assurance_marchandises;
         $checklist->scanner = $request->scanner;
         $checklist->permis_circuler = $request->permis_circuler;
         $checklist->carnet_enter = $request->carnet_enter;
@@ -159,26 +160,22 @@ class DechargeController extends Controller
         $current = $request->get("current") ? $request->get("current") : 1;
         $pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
         $decharges =  DB::table("decharges")
-            // ->join("checklists", "decharges.id", "=", "checklists.decharge_id")
             ->join('checklists', function ($join) {
                 $join->on('decharges.id', '=', 'checklists.decharge_id')
                     ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.decharge_id = decharges.id)"));
             })
             ->join('clients', 'decharges.client_id', '=', 'clients.id')
             ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
-            ->join("cars", "checklists.car_id", "=", "cars.id");
-        if ($request->auth->username !== "admin") {
-            $decharges = $decharges->join("car_user", "cars.id", "car_user.car_id")
-                ->join("users as owners", "car_user.user_id", "=", "owners.id");
-        }
-        $decharges = $decharges->join("users as creates", "checklists.createdby_id", "=", "creates.id");
-        $decharges = $decharges->leftJoin("users as acceptes", "decharges.acceptedby_id", "=", "acceptes.id")
-            ->join("drivers", "checklists.driver_id", "=", "drivers.id");
-        if ($request->auth->username !== "admin") {
-            $decharges = $decharges->select([
+            ->join("cars", "checklists.car_id", "=", "cars.id")
+            ->join("car_user", "cars.id", "car_user.car_id")
+            ->join("drivers", "checklists.driver_id", "=", "drivers.id")
+            ->join("users as creates", "checklists.createdby_id", "=", "creates.id")
+            ->leftJoin("users as acceptes", "decharges.acceptedby_id", "=", "acceptes.id")
+            ->join("users as owners", "car_user.user_id", "=", "owners.id")
+            ->select([
                 'restititions.id as restititions.id',
                 'decharges.id as id',
-                'cars.matricule as cars.matricule',
+                'cars.matricule as cars_matricule',
                 'checklists.car_id as car_id',
                 DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                 'code_gps',
@@ -189,32 +186,19 @@ class DechargeController extends Controller
                 'acceptes.username as acceptedby_username',
                 'owners.id as ownerId'
             ])
-                ->orderBy($sortBy, $sort)
-                ->where("owners.id", "=", $request->auth->id);
-        } else {
-            $decharges = $decharges->select([
-                'restititions.id as restititions.id',
-                'decharges.id as id',
-                'cars.matricule as cars.matricule',
-                'checklists.car_id as car_id',
-                DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
-                'code_gps',
-                'designation as clients.designation',
-                'decharges.date_decharge as date_decharge',
-                'date_fin_prestation',
-                'creates.username as createdby_username',
-                'acceptes.username as acceptedby_username',
-            ])->orderBy($sortBy, $sort);;
-        }
-
-        return $decharges->where('matricule', 'like', "%{$request->get("matricule")}%")
+            ->where("owners.id", "=", $request->auth->id)
+            ->where('cars.matricule', 'like', "%{$request->get("cars_matricule")}%")
+            ->where('cars.code_gps', 'like', "%{$request->get("code_gps")}%")
             ->where('restititions.id', '=', null)
+            ->orderBy($sortBy, $sort)
             ->paginate(
                 $pageSize, // per page (may be get it from request)
                 ['*'], // columns to select from table (default *, means all fields)
                 'page', // page name that holds the page number in the query string
                 $current // current page, default 1
             );
+            
+        return $decharges;
     }
 
     function getDechargesRestititions(Request $request)
@@ -238,7 +222,7 @@ class DechargeController extends Controller
                     'restititions.id as restititions.id',
                     'restititions.date_restitition as restititions.date_restitition',
                     'decharges.id as id',
-                    'cars.matricule as cars.matricule',
+                    'cars.matricule as cars_matricule',
                     'checklists.car_id as car_id',
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                     'code_gps',
@@ -248,7 +232,8 @@ class DechargeController extends Controller
                     'username'
                 ])
                 ->orderBy($sortBy, $sort)
-                ->where('matricule', 'like', "%{$request->get("matricule")}%")
+                ->where('cars.matricule', 'like', "%{$request->get("cars_matricule")}%")
+                ->where('cars.code_gps', 'like', "%{$request->get("code_gps")}%")
                 ->where('restititions.id', '<>', null)
                 ->paginate(
                     $pageSize, // per page (may be get it from request)
@@ -323,6 +308,7 @@ class DechargeController extends Controller
                 'starts',
                 'carte_grise',
                 'assurance',
+                'assurance_marchandises',
                 'scanner',
                 'permis_circuler',
                 'carnet_enter',
@@ -433,6 +419,7 @@ class DechargeController extends Controller
                 $checklist->starts = $request->starts;
                 $checklist->carte_grise = $request->carte_grise;
                 $checklist->assurance = $request->assurance;
+                $checklist->assurance_marchandises = $request->assurance_marchandises;
                 $checklist->scanner = $request->scanner;
                 $checklist->permis_circuler = $request->permis_circuler;
                 $checklist->carnet_enter = $request->carnet_enter;
