@@ -40,6 +40,7 @@ class DriverController extends Controller
         $data = $request->get('data');
         $drivers = Driver::where('firstname', 'like', "%{$data}%")
             ->orWhere('lastname', 'like', "%{$data}%")
+            ->orWhere('code_paie', 'like', "%{$data}%")
             ->take(8)
             ->get();
 

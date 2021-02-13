@@ -165,6 +165,7 @@ class DechargeController extends Controller
                     ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.decharge_id = decharges.id)"));
             })
             ->join('clients', 'decharges.client_id', '=', 'clients.id')
+            ->leftJoin('clients as clients_mother', 'clients.client_id', '=', 'clients_mother.id')
             ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
             ->join("cars", "checklists.car_id", "=", "cars.id")
             ->join("car_user", "cars.id", "car_user.car_id")
@@ -179,7 +180,8 @@ class DechargeController extends Controller
                 'checklists.car_id as car_id',
                 DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                 'code_gps',
-                'designation as clients.designation',
+                'clients.designation as clients_designation',
+                'clients_mother.designation as clients_mother_designation',
                 'decharges.date_decharge as date_decharge',
                 'date_fin_prestation',
                 'creates.username as createdby_username',
@@ -189,6 +191,8 @@ class DechargeController extends Controller
             ->where("owners.id", "=", $request->auth->id)
             ->where('cars.matricule', 'like', "%{$request->get("cars_matricule")}%")
             ->where('cars.code_gps', 'like', "%{$request->get("code_gps")}%")
+            ->where('clients.designation', 'like', "%{$request->get("clients_designation")}%")
+            //->where('clients_mother.designation', 'like', "%{$request->get("clients_designation")}%")
             ->where('restititions.id', '=', null)
             ->orderBy($sortBy, $sort)
             ->paginate(
@@ -197,7 +201,7 @@ class DechargeController extends Controller
                 'page', // page name that holds the page number in the query string
                 $current // current page, default 1
             );
-            
+
         return $decharges;
     }
 
@@ -214,6 +218,7 @@ class DechargeController extends Controller
                         ->on('checklists.id', '=', DB::raw("(select max(id) from checklists WHERE checklists.decharge_id = decharges.id)"));
                 })
                 ->join('clients', 'decharges.client_id', '=', 'clients.id')
+                ->leftJoin('clients as clients_mother', 'clients.client_id', '=', 'clients_mother.id')
                 ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
                 ->join("cars", "checklists.car_id", "=", "cars.id")
                 ->join("users", "checklists.createdby_id", "=", "users.id")
@@ -226,7 +231,8 @@ class DechargeController extends Controller
                     'checklists.car_id as car_id',
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                     'code_gps',
-                    'designation as clients.designation',
+                    'clients.designation as clients_designation',
+                    'clients_mother.designation as clients_mother_designation',
                     'decharges.date_decharge as date_decharge',
                     'date_fin_prestation',
                     'username'
@@ -234,6 +240,7 @@ class DechargeController extends Controller
                 ->orderBy($sortBy, $sort)
                 ->where('cars.matricule', 'like', "%{$request->get("cars_matricule")}%")
                 ->where('cars.code_gps', 'like', "%{$request->get("code_gps")}%")
+                ->where('clients.designation', 'like', "%{$request->get("clients_designation")}%")
                 ->where('restititions.id', '<>', null)
                 ->paginate(
                     $pageSize, // per page (may be get it from request)
@@ -284,6 +291,7 @@ class DechargeController extends Controller
     {
         $decharge = DB::table("decharges")
             ->join('clients', 'decharges.client_id', '=', 'clients.id')
+            ->leftJoin('clients as clients_mother', 'clients.client_id', '=', 'clients_mother.id')
             ->leftJoin('restititions', 'decharges.id', '=', "restititions.decharge_id")
             ->join("checklists", "decharges.id", "=", "checklists.decharge_id")
             ->join("cars", "checklists.car_id", "=", "cars.id")
@@ -331,21 +339,24 @@ class DechargeController extends Controller
                 'drivers.firstname as drivers.firstname',
                 'drivers.lastname as drivers.lastname',
                 'drivers.tel as drivers.tel',
-                'designation as clients.designation',
+                'clients.designation as clients.designation',
+                'clients_mother.designation as clients_mother_designation',
                 'clients.id as client_id',
-                'clients.id as clients.id'
+                'clients.id as clients.id',
             ])
             ->where('decharges.id', '=', $id)
-            ->orderBy('checklists.id', 'DESC')
+           // ->orderBy('checklists.id', 'DESC')
             ->get();
         if (count($decharge) < 1) {
             return $this->error("Not found");
         }
         $d = $decharge[0];
-        //dump($d);
-        if ($d->restititions_id !== null) {
-            $d->restitition = Restitition::find($d->restititions_id)->with("checklist")->get()->all()[0];
-            //dump($r);
+        //dump($d->restititions_id);
+        if ($d->restititions_id) {
+            $r = Restitition::find($d->restititions_id);
+            $r->checklist = $r->checklist()->get()->all()[0];
+            $d->restitition = $r;
+            //dump($d->restitition);
         }
         $d->client = Client::find($d->client_id);
         $d->car = Car::find($d->car_id);
@@ -556,19 +567,26 @@ class DechargeController extends Controller
 
     function deleteRestitition(Request $request, $id)
     {
-        $r = Restitition::find($id);
-        $r->checklist()->get()->all()[0];
-        $ch = $r->checklist()->get()->all()[0];
-        if ($ch->createdby_id === $request->auth->id) {
-            $r->delete();
-            $ch->delete();
-            $ns = Notification::where("type", "=", "car_state_restitution")->where("type_id", "=", $id)->get()->all();
-            foreach ($ns as $n) {
-                $n->delete();
+        if ($this->hasRole($request, "SUPPRIMER_DECHARGE_RESTIUER")) {
+            try {
+                $r = Restitition::find($id);
+            } catch (QueryException $e) {
+                return $this->http_bad();
             }
-            return $this->success([], "Bien supprimer");
+            $r->checklist()->get()->all()[0];
+            $ch = $r->checklist()->get()->all()[0];
+            if ($ch->createdby_id === $request->auth->id) {
+                $r->delete();
+                $ch->delete();
+                $ns = Notification::where("type", "=", "car_state_restitution")->where("type_id", "=", $id)->get()->all();
+                foreach ($ns as $n) {
+                    $n->delete();
+                }
+                return $this->success([], "Bien supprimer");
+            }
+            return $this->error("Non supprimer");
         }
-        return $this->error("Non supprimer");
+        return $this->http_unauthorized();
     }
 
     function deleteDecharge(Request $request, $id)

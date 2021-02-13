@@ -118,13 +118,17 @@ class CarController extends Controller
         $cars = DB::table("cars")
             ->join("car_user", "cars.id", "car_user.car_id")
             ->join("users", "users.id", "car_user.user_id")
+            ->leftJoin("car_group", "cars.id", "=", "car_group.car_id")
+            ->leftJoin("groups", "groups.id", "=", "car_group.group_id")
             ->select([
+                "groups.name as groups_name",
                 "cars.id as id",
                 "matricule",
                 "marque"
             ])
             ->where("users.id", "=", $request->auth->id)
             ->where("matricule", "like", "%{$request->data}%")
+            ->where("groups.name", "like", "%{$request->groupe}%")
             ->take(8)
             ->get()->all();
 
@@ -145,6 +149,7 @@ class CarController extends Controller
 
     function getAllUserCars(Request $request)
     {
+        $filters = json_decode($request->get("filters"));
         if ($this->hasRole($request, "LISTE_VEHICULES")) {
             $sort = $request->get("sort") === "ascend" ? "asc" : "desc";
             $sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
@@ -183,11 +188,27 @@ class CarController extends Controller
                     "car_states.state_date",
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                     "drivers.id as driversId"
-                ])
-                ->where('matricule', 'like', "%{$request->get("matricule")}%")
-                ->where('code_gps', 'like', "%{$request->get("code_gps")}%")
+                ]);
+
+            if ($filters && isset($filters->groupName)) {
+                $data = $data->whereIn('groups.name', $filters->groupName);
+            }
+            if ($filters && isset($filters->genre)) {
+                $data = $data->whereIn('cars.genre', $filters->genre);
+            }
+            if ($filters && isset($filters->marque)) {
+                $data = $data->whereIn('cars.marque', $filters->marque);
+            }
+            if ($filters && isset($filters->state)) {
+                $data = $data->whereIn('car_states.name', $filters->state);
+            }
+            $data = $data->where('matricule', 'like', "%{$request->get("matricule")}%");
+
+            if ($request->get("client")) {
+                $data = $data->where('clients.designation', 'like', "%{$request->get("client")}%");
+            }
+            $data = $data->where('code_gps', 'like', "%{$request->get("code_gps")}%")
                 ->where('car_user.user_id', '=', $request->auth->id)
-                // ->where('car_user.user_id', '=', $request->auth->id)
                 ->orderBy($sortBy, $sort)
                 ->paginate(
                     $pageSize, // per page (may be get it from request)
@@ -317,6 +338,20 @@ class CarController extends Controller
             ->whereIn("car_states.name", ["ACCIDENTE"])
             ->count();
 
+        $other_v =  DB::table("cars")
+            ->join("car_group", "cars.id", "=", "car_group.car_id")
+            ->join("groups", "groups.id", "=", "car_group.group_id")
+            ->join('car_states', function ($join) {
+                $join->on('cars.id', '=', 'car_states.car_id')
+                    ->on('car_states.id', '=', DB::raw("(select max(id) from car_states WHERE car_states.car_id = cars.id)"));
+            })
+            ->select([
+                "groups.name"
+            ])
+            ->where("groups.name", "=", "LEGER")
+            ->whereIn("car_states.name", ["VOLEE", "VENDU"])
+            ->count();
+
 
         $affecte_vl = DB::table("cars")
             ->join("car_group", "cars.id", "=", "car_group.car_id")
@@ -333,7 +368,7 @@ class CarController extends Controller
             ->where("groups.name", "=", "LEGER")
             ->count();
 
-        $operationel_vl = $capacity_logistics_vl - $accedente_v - $en_panne_vl;
+        $operationel_vl = $capacity_logistics_vl - $accedente_v - $en_panne_vl - $other_v;
 
         $non_exploite_vl = $operationel_vl - $affecte_vl;
 

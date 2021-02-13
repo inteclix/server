@@ -35,23 +35,26 @@ class CreateMissionsTable extends Migration
             $table->foreign('driver2_id')->references('id')->on('drivers')
                 ->onDelete('restrict')
                 ->onUpdate('restrict');
-            // par default cree un status - en attente de chargement
-            $table->integer('car_state_id')->unsigned();
-            $table->foreign('car_state_id')->references('id')->on('car_states')
-                ->onDelete('restrict')
-                ->onUpdate('restrict');
+            $table->string('state')->nullable();
             // lieux
             $table->string("numero")->nullable(); // numero 
-            $table->string("l_chargement"); // code_postal
-            $table->string("l_dechargement"); // code_postal
+            $table->string("depart"); // code_postal
+            $table->string("destination"); // code_postal
             // dates
-            $table->dateTime('date_mission');
-            $table->dateTime('date_bon_chargement')->nullable();
+            $table->dateTime('date_depart_mission');
+            $table->dateTime('date_arrivee_mission');
+            $table->dateTime('date_bon_chargement')->nullable(); // DATE D'EFFET
             $table->dateTime('date_depart')->nullable();
-            $table->dateTime('date_arrive_destination')->nullable(); // client
+            $table->dateTime('date_arrivee_destination')->nullable(); // client
             $table->dateTime('date_depart_destination')->nullable(); // client
-            $table->dateTime('date_arrive')->nullable();
+            $table->dateTime('date_arrivee')->nullable();
             $table->integer("km")->nullable();
+            $table->integer("da_km")->nullable();
+            $table->integer("dejenner")->nullable();
+            $table->integer("diner")->nullable();
+            $table->integer("parking")->nullable();
+            $table->integer("decoucher")->nullable();
+            $table->integer("other")->nullable();
 
             $table->string("observation")->nullable();
 

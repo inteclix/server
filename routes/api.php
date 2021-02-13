@@ -407,4 +407,24 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
         'uses' => 'CarController@dashboard_vl',
         'as' => 'api.cars.dashboard_vl'
     ]);
+
+    // cities routes
+
+    $router->get('/cities/search', [
+        'uses' => 'CityController@search',
+        'as' => 'api.cities.search'
+    ]);
+
+    // missions routes
+
+    $router->post('/missions', [
+        'uses' => 'MissionController@create',
+        'as' => 'api.missions.create'
+    ]);
+
+    $router->get('/missions', [
+        'uses' => 'MissionController@getMissions',
+        'as' => 'api.missions.getMissions'
+    ]);
+
 });
