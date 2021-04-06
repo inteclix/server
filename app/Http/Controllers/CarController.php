@@ -170,25 +170,44 @@ class CarController extends Controller
                 ->leftJoin("clients", "clients.id", "=", "decharges.client_id")
                 ->leftJoin("car_user", "car_user.car_id", "=", "cars.id")
                 ->leftJoin("car_group", "car_group.car_id", "=", "cars.id")
-                ->leftJoin("groups", "car_group.group_id", "=", "groups.id")
-                ->select([
+                ->leftJoin("groups", "car_group.group_id", "=", "groups.id");
+            if ($request->format == "json") {
+                $data = $data->select([
+                    "cars.matricule",
+                    "cars.code_gps",
+                    "cars.marque",
                     "groups.name as groupName",
-                    "car_user.user_id",
                     "clients.designation as client",
-                    "clients.id as clientId",
                     "checklists.date_checklist",
                     "cars.id as id",
-                    "decharges.id as decharges.id",
-                    "cars.matricule",
                     "cars.genre",
                     "checklists.odometre",
-                    "cars.marque",
-                    "cars.code_gps",
                     "car_states.name as state",
                     "car_states.state_date",
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
+                    "decharges.id as decharges.id",
+                    "clients.id as clientId",
+                    "car_user.user_id",
                     "drivers.id as driversId"
                 ]);
+            }
+            if ($request->format == "excel") {
+                $data = $data->select([
+                    "cars.id as id",
+                    "cars.matricule",
+                    "cars.code_gps",
+                    "cars.genre",
+                    "cars.marque",
+                    "groups.name as groupName",
+                    "decharges.date_decharge as date_decharge",
+                    "clients.designation as client",
+                    DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
+                    "checklists.date_checklist",
+                    "checklists.odometre",
+                    "car_states.name as state",
+                    "car_states.state_date",
+                ]);
+            }
 
             if ($filters && isset($filters->groupName)) {
                 $data = $data->whereIn('groups.name', $filters->groupName);
@@ -209,14 +228,35 @@ class CarController extends Controller
             }
             $data = $data->where('code_gps', 'like', "%{$request->get("code_gps")}%")
                 ->where('car_user.user_id', '=', $request->auth->id)
-                ->orderBy($sortBy, $sort)
-                ->paginate(
+                ->orderBy($sortBy, $sort);
+
+            if ($request->format == "json") {
+                return $data->paginate(
                     $pageSize, // per page (may be get it from request)
                     ['*'], // columns to select from table (default *, means all fields)
                     'page', // page name that holds the page number in the query string
                     $current // current page, default 1
-                );
-            return $data;
+                );;
+            }
+            if ($request->format == "excel") {
+                $data = $data->get();
+                $data->prepend([
+                    "id" => "ID",
+                    "matricule" => "MATRICULE",
+                    "code_gps" => "CODE GPS",
+                    "genre" => "GENRE",
+                    "marque" => "MARQUE",
+                    "groupName" => "GROUPE",
+                    "date_decharge" => "DATE DECHARGE",
+                    "client" => "CLIENT",
+                    "drivers_fullname" => "CONDUCTEUR",
+                    "date_checklist" => "DATE CHECKLIST",
+                    "odometre" => "ODOMETRE",
+                    "state" => "STATUS",
+                    "state_date" => "DATE STATUS"
+                ]);
+                return Excel::download(new CollectionsExport($data), 'etat_vehicules.xlsx');
+            }
         }
 
         return $this->http_unauthorized();
