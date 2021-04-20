@@ -460,4 +460,75 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
 		'uses' => 'MissionvlController@changeStateMission',
 		'as' => 'api.missionvls.changeStateMission'
 	]);
+
+	// SMI AXES STRATIGIQUE
+
+	$router->get('/smi_axes/', [
+		'uses' => 'AxeController@getAll',
+		'as' => 'api.axes.getAll'
+	]);
+
+	$router->get('/smi_axes/search', [
+		'uses' => 'AxeController@search',
+		'as' => 'api.axes.search'
+	]);
+
+	$router->get('/smi_processus/', [
+		'uses' => 'ProcessuController@getAll',
+		'as' => 'api.processus.getAll'
+	]);
+
+	$router->get('/smi_processus/search', [
+		'uses' => 'ProcessuController@search',
+		'as' => 'api.processus.search'
+	]);
+
+	$router->get('/smi_objectis/', [
+		'uses' => 'ObjectifController@getAll',
+		'as' => 'api.objectifs.getAll'
+	]);
+
+	$router->get('/smi_objectifs/search', [
+		'uses' => 'ObjectifController@search',
+		'as' => 'api.processus.search'
+	]);
+
+	$router->post('/smi_objectifs/', [
+		'uses' => 'ObjectifController@create',
+		'as' => 'api.objectifs.create'
+	]);
+
+	$router->post('/smi_objectifs/delete/{id}', [
+		'uses' => 'ObjectifController@delete',
+		'as' => 'api.objectifs.create'
+	]);
+
+	$router->get('/smi_indicateurs/', [
+		'uses' => 'IndicateurController@getAll',
+		'as' => 'api.indicateurs.create'
+	]);
+
+	$router->get('/smi_indicateurs/{id}', [
+		'uses' => 'IndicateurController@get',
+		'as' => 'api.indicateurs.get'
+	]);
+
+	$router->post('/smi_indicateurs/', [
+		'uses' => 'IndicateurController@create',
+		'as' => 'api.indicateurs.create'
+	]);
+
+	$router->post('/smi_indicateurs/create_valeur', [
+		'uses' => 'IndicateurController@createValeur',
+		'as' => 'api.indicateurs.create_valeur'
+	]);
+
+	$router->post('/smi_indicateurs/delete/{id}', [
+		'uses' => 'IndicateurController@delete',
+		'as' => 'api.indicateurs.delete'
+	]);
+	$router->post('/smi_indicateurvs/delete/{id}', [
+		'uses' => 'IndicateurController@deleteValeur',
+		'as' => 'api.indicateurs.deleteValeur'
+	]);
 });

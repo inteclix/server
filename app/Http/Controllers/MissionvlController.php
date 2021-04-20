@@ -8,6 +8,8 @@ use Illuminate\Database\QueryException;
 use App\Missionvl;
 use App\Car;
 use GrahamCampbell\ResultType\Result;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\CollectionsExport;
 
 class MissionvlController extends Controller
 {
@@ -217,8 +219,28 @@ class MissionvlController extends Controller
 			->leftJoin("users as gpsbys", "createdbys.id", "=", "missionvls.gpsby_id")
 			->leftJoin("users as acceptedbys", "acceptedbys.id", "=", "missionvls.acceptedby_id")
 			->join("car_group", "car_group.car_id", "=", "cars.id")
-			->join("groups", "groups.id", "=", "car_group.group_id")
-			->select([
+			->join("groups", "groups.id", "=", "car_group.group_id");
+
+		if ($request->format == "excel") {
+			$missionvls = $missionvls->select([
+				"missionvls.id as id",
+				"cars.matricule as cars_matricule",
+				"cars.code_gps as cars_code_gps",
+				"clients.designation as clients_designation",
+				DB::raw("CONCAT(driver1s.firstname, ' ',driver1s.lastname) as driver1s_fullname"),
+				DB::raw("CONCAT(departs.wilaya_name, ', ',departs.daira_name, ', ', departs.commune_name) as depart"),
+				DB::raw("CONCAT(destinations.wilaya_name, ', ',destinations.daira_name, ', ', destinations.commune_name) as distination"),
+				//"missionvls.date_depart_mission as missions_date_depart_mission",
+				//"missionvls.date_arrivee_mission as missions_date_arrivee_mission",
+				DB::raw("DATE_FORMAT(missionvls.date_depart_mission, '%d/%m/%Y') as missions_date_depart_mission"),
+				DB::raw("DATE_FORMAT(missionvls.date_arrivee_mission, '%d/%m/%Y') as missions_date_arrivee_mission"),
+				"missionvls.state as missionvls_state",
+				"createdbys.username as createdby_username",
+				//"gpsbys.username as gpsby_username",
+				"acceptedbys.username as acceptedby_username",
+			]);
+		} else {
+			$missionvls = $missionvls->select([
 				"cars.matricule as cars_matricule",
 				"cars.code_gps as cars_code_gps",
 				"remourques.matricule as remourques_matricule",
@@ -232,6 +254,7 @@ class MissionvlController extends Controller
 				"destinations.wilaya_name as destinations_wilaya_name",
 				"destinations.daira_name as destinations_daira_name",
 				"destinations.commune_name as destinations_commune_name",
+				DB::raw("CONCAT(destinations.wilaya_name, ' ',destinations.daira_name, ' ', destinations.commune_name) as distination"),
 				"createdbys.username as createdby_username",
 				"gpsbys.username as gpsby_username",
 				"acceptedbys.username as acceptedby_username",
@@ -239,14 +262,39 @@ class MissionvlController extends Controller
 				"missionvls.date_depart_mission as missions_date_depart_mission",
 				"missionvls.date_arrivee_mission as missions_date_arrivee_mission",
 				"missionvls.state as missionvls_state"
-			])
-			//->where("owners.id", "=", $request->auth->id)
-			//->where('groups.name', '=', $request->group)
+			]);
+		}
+
+		$missionvls = $missionvls
+			->where("missionvls.date_depart_mission", ">=", "{$request->date1}")
+			->where("missionvls.date_depart_mission", "<=", "{$request->date2}")
 			->where('cars.matricule', 'like', "%{$request->get("cars_matricule")}%")
 			//->where('remourques.matricule', 'like', "%{$request->get("remourques_matricule")}%")
 			->where('cars.code_gps', 'like', "%{$request->get("code_gps")}%")
 			->where('clients.designation', 'like', "%{$request->get("clients_designation")}%")
-			->orderBy($sortBy, $sort)
+			->orderBy($sortBy, $sort);
+		//->where("owners.id", "=", $request->auth->id)
+		//->where('groups.name', '=', $request->group)
+		if ($request->format == "excel") {
+			$missionvls = $missionvls->get();
+			$missionvls->prepend([
+				"id" => "ID",
+				"cars_matricule" => "MATRICULE",
+				"cars_code_gps" => "CODE GPS",
+				"clients_designation" => "CLIENT",
+				"driver1s_fullname" => "CONDUCTEUR",
+				"depart" => "DEPART",
+				"destination" => "ARRIVEE",
+				"missionvls.date_depart_mission" => "DATE DEPART",
+				"missionvls.date_arrivee_mission" => "DATE ARRIVEE",
+				"missionvls.state" => "STATUS",
+				"createdby_username" => "CREE PAR",
+				//"gpsby_username" => "GPS PAR",
+				"acceptedby_username" => "VALIDER PAR",
+			]);
+			return Excel::download(new CollectionsExport($missionvls), 'etat_missions_vl.xlsx');
+		}
+		return $missionvls
 			->paginate(
 				$pageSize, // per page (may be get it from request)
 				['*'], // columns to select from table (default *, means all fields)

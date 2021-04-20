@@ -265,7 +265,7 @@ class DechargeController extends Controller
                     'restititions.id as restititions.id',
                     'restititions.date_restitition as restititions.date_restitition',
                     'decharges.id as id',
-                    'cars.matricule as cars.matricule',
+                    'cars.matricule as cars_matricule',
                     'checklists.car_id as car_id',
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                     'code_gps',
