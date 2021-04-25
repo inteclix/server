@@ -273,6 +273,7 @@ class CarController extends Controller
             $car->prop = $request->prop;
             $car->old_matricule = $request->old_matricule;
             $car->color = $request->color;
+            $car->nb_places = $request->nb_places;
             $car->code_gps = $request->code_gps;
             $car->genre = $request->genre;
             $car->marque = $request->marque;
@@ -320,6 +321,7 @@ class CarController extends Controller
             $car->prop = $request->prop;
             $car->old_matricule = $request->old_matricule;
             $car->color = $request->color;
+            $car->nb_places = $request->nb_places;
             $car->code_gps = $request->code_gps;
             $car->genre = $request->genre;
             $car->marque = $request->marque;

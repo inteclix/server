@@ -35,7 +35,6 @@ class MissionvlController extends Controller
 			"client_id" => "required",
 			"driver1_id" => "required",
 			"depart_id" => "required",
-			"destination_id" => "required",
 		]);
 		if (!$this->checkIfCarAvailableForMission($request->car_id)) {
 			return $this->http_unauthorized("Le véhicule est déjà en cours de missionvl");
@@ -51,7 +50,7 @@ class MissionvlController extends Controller
 				$missionvl->driver2_id = $request->driver2_id;
 				$missionvl->date_bon_mission = $request->date_bon_mission;
 				$missionvl->depart_id = $request->depart_id;
-				$missionvl->destination_id = $request->destination_id;
+				$missionvl->destinations = $request->destinations;
 				$missionvl->date_depart_mission = $request->date_depart_mission;
 				$missionvl->date_arrivee_mission = $request->date_arrivee_mission;
 				$missionvl->observation = $request->observation;
@@ -76,7 +75,6 @@ class MissionvlController extends Controller
 			"client_id" => "required",
 			"driver1_id" => "required",
 			"depart_id" => "required",
-			"destination_id" => "required",
 		]);
 
 		if ($request->type == "VL") {
@@ -93,7 +91,7 @@ class MissionvlController extends Controller
 				$missionvl->driver2_id = $request->driver2_id;
 				$missionvl->date_bon_mission = $request->date_bon_mission;
 				$missionvl->depart_id = $request->depart_id;
-				$missionvl->destination_id = $request->destination_id;
+				$missionvl->destinations = $request->destinations;
 				$missionvl->date_depart_mission = $request->date_depart_mission;
 				$missionvl->date_arrivee_mission = $request->date_arrivee_mission;
 				$missionvl->observation = $request->observation;
@@ -214,7 +212,6 @@ class MissionvlController extends Controller
 			->join("drivers as driver1s", "driver1s.id", "=", "missionvls.driver1_id")
 			->leftJoin("drivers as driver2s", "driver2s.id", "=", "missionvls.driver2_id")
 			->join("cities as departs", "departs.id", "=", "missionvls.depart_id")
-			->join("cities as destinations", "destinations.id", "=", "missionvls.destination_id")
 			->join("users as createdbys", "createdbys.id", "=", "missionvls.createdby_id")
 			->leftJoin("users as gpsbys", "createdbys.id", "=", "missionvls.gpsby_id")
 			->leftJoin("users as acceptedbys", "acceptedbys.id", "=", "missionvls.acceptedby_id")
@@ -229,11 +226,12 @@ class MissionvlController extends Controller
 				"clients.designation as clients_designation",
 				DB::raw("CONCAT(driver1s.firstname, ' ',driver1s.lastname) as driver1s_fullname"),
 				DB::raw("CONCAT(departs.wilaya_name, ', ',departs.daira_name, ', ', departs.commune_name) as depart"),
-				DB::raw("CONCAT(destinations.wilaya_name, ', ',destinations.daira_name, ', ', destinations.commune_name) as distination"),
+				"missionvls.destinations as destinations",
 				//"missionvls.date_depart_mission as missions_date_depart_mission",
 				//"missionvls.date_arrivee_mission as missions_date_arrivee_mission",
 				DB::raw("DATE_FORMAT(missionvls.date_depart_mission, '%d/%m/%Y') as missions_date_depart_mission"),
 				DB::raw("DATE_FORMAT(missionvls.date_arrivee_mission, '%d/%m/%Y') as missions_date_arrivee_mission"),
+				"missionvls.state as missionvls_state",
 				"missionvls.state as missionvls_state",
 				"createdbys.username as createdby_username",
 				//"gpsbys.username as gpsby_username",
@@ -251,10 +249,7 @@ class MissionvlController extends Controller
 				"departs.wilaya_name as departs_wilaya_name",
 				"departs.daira_name as departs_daira_name",
 				"departs.commune_name as departs_commune_name",
-				"destinations.wilaya_name as destinations_wilaya_name",
-				"destinations.daira_name as destinations_daira_name",
-				"destinations.commune_name as destinations_commune_name",
-				DB::raw("CONCAT(destinations.wilaya_name, ' ',destinations.daira_name, ' ', destinations.commune_name) as distination"),
+				"missionvls.destinations as destinations",
 				"createdbys.username as createdby_username",
 				"gpsbys.username as gpsby_username",
 				"acceptedbys.username as acceptedby_username",

@@ -18,6 +18,55 @@ class IndicateurController extends Controller
 {
 	function get($id, Request $request)
 	{
+		$sort = $request->get("sort") === "ascend" ? "asc" : "desc";
+		$sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
+		$current = $request->get("current") ? $request->get("current") : 1;
+		$pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
+		$indicateur = Indicateur::findOrFail($id);
+		if ($this->hasRole($request, "SMI_INDICATEURS")) {
+			$data = DB::table("indicateurvs")
+				->join("indicateurs", "indicateurs.id", "=", "indicateurvs.indicateur_id")
+				->select([
+					"indicateurvs.id as id",
+					"valeur",
+					"date",
+					"comment",
+					"name"
+				])
+				->where("indicateurs.id", "=", $id)
+				->orderBy("id", "asc")
+				->paginate(
+					$pageSize, // per page (may be get it from request)
+					['*'], // columns to select from table (default *, means all fields)
+					'page', // page name that holds the page number in the query string
+					$current // current page, default 1
+				);
+			return $this->http_ok($data);
+		} else {
+			$this->http_unauthorized();
+		}
+		try {
+			$indicateur = Indicateur::findOrFail($id);
+			$indicateur->processu = $indicateur->processu()->get()->all()[0];
+			$indicateur->objectif = $indicateur->objectif()->get()->all()[0];
+			$indicateur->valeurs = $indicateur->valeurs()
+				->orderByRaw("date->'$.year'", "asc")
+				->orderByRaw("date->'$.value'", "asc")
+				->take(8)->get()->all();
+		} catch (Exception $e) {
+			return new JsonResponse([
+				'message' => 'Id d\'ont exist',
+			], Response::HTTP_BAD_REQUEST);
+		}
+
+		return new JsonResponse([
+			'message' => 'Success get',
+			'data' => $indicateur
+		]);
+	}
+
+	function getb($id, Request $request)
+	{
 		try {
 			$indicateur = Indicateur::findOrFail($id);
 			$indicateur->processu = $indicateur->processu()->get()->all()[0];
@@ -100,6 +149,7 @@ class IndicateurController extends Controller
 			$indicateur->methode_calcul = $request->methode_calcul;
 			$indicateur->frequence = $request->frequence;
 			$indicateur->mode_calcul = $request->mode_calcul;
+			$indicateur->type = $request->type;
 			try {
 				$indicateur->save();
 			} catch (QueryException $e) {
@@ -118,10 +168,22 @@ class IndicateurController extends Controller
 			"date" => "required",
 			"valeur" => "required"
 		]);
-
+		$date = $request->date;
+		$exist = Indicateurv::where("indicateur_id", "=", $request->indicateur_id)
+			->when($date, function ($query, $date) {
+				$date = json_decode($date);
+				$query->where("date->type", "=", $date->type)
+					->where("date->year", "=", $date->year)
+					->where("date->value", "=", $date->value);
+			})
+			->get()->all();
+		if (count($exist) > 0) {
+			return $this->http_unauthorized("La valeur de cette date est deja existe");
+		}
 		if ($this->hasRole($request, "AJOUTER_VALEUR_INDICATEUR")) {
 			$indicateurv = new Indicateurv();
 			$indicateurv->indicateur_id = $request->indicateur_id;
+
 			$indicateurv->date = $request->date;
 			$indicateurv->valeur = $request->valeur;
 			$indicateurv->comment = $request->comment;
