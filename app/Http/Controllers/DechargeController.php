@@ -269,7 +269,7 @@ class DechargeController extends Controller
                     'checklists.car_id as car_id',
                     DB::raw("CONCAT(drivers.firstname, ' ',drivers.lastname) as drivers_fullname"),
                     'code_gps',
-                    'designation as clients.designation',
+                    'designation as clients_designation',
                     'decharges.date_decharge as date_decharge',
                     'date_fin_prestation',
                     'users.username as username',

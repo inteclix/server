@@ -531,4 +531,62 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
 		'uses' => 'IndicateurController@deleteValeur',
 		'as' => 'api.indicateurs.deleteValeur'
 	]);
+	// Non conformités
+
+
+	$router->post('/smi_conformites/', [
+		'uses' => 'ConformiteController@create',
+		'as' => 'api.conformites.create'
+	]);
+
+
+
+	$router->get('/smi_conformites/', [
+		'uses' => 'ConformiteController@getAll',
+		'as' => 'api.conformites.getAll'
+	]);
+
+	$router->post('/smi_conformites/correcte/{id}', [
+		'uses' => 'ConformiteController@correcte',
+		'as' => 'api.conformites.correcte'
+	]);
+
+	$router->post('/smi_conformites/delete/{id}', [
+		'uses' => 'ConformiteController@delete',
+		'as' => 'api.conformites.delete'
+	]);
+	
+	$router->get('/smi_conformites/search', [
+		'uses' => 'ConformiteController@search',
+		'as' => 'api.conformites.search'
+	]);
+
+	// Plan actions
+
+
+
+	$router->get('/smi_actions/', [
+		'uses' => 'ActionController@getAll',
+		'as' => 'api.actions.getAll'
+	]);
+
+	$router->post('/smi_actions/', [
+		'uses' => 'ActionController@create',
+		'as' => 'api.actions.create'
+	]);
+
+	$router->post('/smi_actions/correcte/{id}', [
+		'uses' => 'ActionController@correcte',
+		'as' => 'api.actions.correcte'
+	]);
+
+	$router->post('/smi_actions/accepte/{id}', [
+		'uses' => 'ActionController@accepte',
+		'as' => 'api.actions.accepte'
+	]);
+
+	$router->post('/smi_actions/delete/{id}', [
+		'uses' => 'ActionController@delete',
+		'as' => 'api.actions.delete'
+	]);
 });
