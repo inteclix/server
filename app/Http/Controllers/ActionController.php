@@ -22,6 +22,9 @@ class ActionController extends Controller
 {
 	function create(Request $request)
 	{
+		if (!$this->hasRole($request, "PROCESSUS_" . Processu::find($request->processu_id)->slog)) {
+			return $this->http_unauthorized();
+		}
 		if ($this->hasRole($request, "SMI_AJOUTER_ACTION")) {
 			$nac = new Action;
 			$nac->name = $request["action"];
@@ -29,7 +32,7 @@ class ActionController extends Controller
 			$nac->users = json_encode($request["users"]);
 			$nac->createdby_id = $request->auth->id;
 			$nac->conformite_id = $request->conformite_id;
-			$nac->processu_id  = $request->processu_id ;
+			$nac->processu_id  = $request->processu_id;
 			if ($request->conformite_id) {
 				$c = Conformite::find($request->conformite_id);
 				if ($c->createdby_id !== $nac->createdby_id) {
@@ -62,6 +65,17 @@ class ActionController extends Controller
 		$sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
 		$current = $request->get("current") ? $request->get("current") : 1;
 		$pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
+		$filters = json_decode($request->get("filters")) ? json_decode($request->get("filters")) : null;
+		if (property_exists($filters, "actions_avancement")) {
+			$avancement = $filters->actions_avancement ? $filters->actions_avancement : [];
+		} else {
+			$avancement = [];
+		}
+		if (property_exists($filters, "actions_type")) {
+			$type = $filters->actions_type ? $filters->actions_type : [];
+		} else {
+			$type = [];
+		}
 		if ($this->hasRole($request, "SMI_LISTE_ACTIONS")) {
 			$actions = DB::table("actions")
 				->join("users as createdbys", "createdbys.id", "=", "actions.createdby_id")
@@ -81,11 +95,25 @@ class ActionController extends Controller
 					"actions.users as actions_users",
 					"conformites.name as conformites_name",
 					"processus.slog as processus_slog",
+					"processus.id as processus_id",
 					"createdbys.username as createdbys_username",
 					"acceptedbys.username as acceptedbys_username"
 				])
 				->where("actions.name", "like", "%{$request->get("actions_name")}%")
-				->orderBy($sortBy, $sort)
+				->where("processus.id", "=", $request->processu_id);
+			if (in_array("AC", $type) && !in_array("AA", $type)) {
+				$actions = $actions->where("conformites.id", "<>", null);
+			}
+			if (!in_array("AC", $type) && in_array("AA", $type)) {
+				$actions = $actions->where("conformites.id", "=", null);
+			}
+			if (!in_array("en_cours", $avancement) && in_array("realise", $avancement)) {
+				$actions = $actions->where("actions.avancement", "=", 100);
+			}
+			if (in_array("en_cours", $avancement) && !in_array("realise", $avancement)) {
+				$actions = $actions->where("actions.avancement", "<>", 100);
+			}
+			$actions = $actions->orderBy($sortBy, $sort)
 				->paginate(
 					$pageSize, // per page (may be get it from request)
 					['*'], // columns to select from table (default *, means all fields)
@@ -156,7 +184,7 @@ class ActionController extends Controller
 
 	function delete(Request $request, $id)
 	{
-		if ($this->hasRole($request, "SUPPRIMER_ACTION")) {
+		if (Action::find($id)->createdby_id === $request->auth->id) {
 			try {
 				Action::destroy($id);
 			} catch (QueryException $e) {
@@ -167,5 +195,23 @@ class ActionController extends Controller
 		}
 
 		return $this->http_unauthorized();
+	}
+
+	function nature_action_by_processus(Request $request, $id)
+	{
+		$aa = Action::all()->where("conformite_id", "=", null)->where("processu_id", "=", $id)->count();
+		$ac = Action::all()->where("conformite_id", "<>", null)->where("processu_id", "=", $id)->count();
+		return $this->http_ok(
+			[
+				[
+					"value" => $ac,
+					"type" => "Action Corrective"
+				],
+				[
+					"value" => $aa,
+					"type" => "Action Amélioration"
+				]
+			]
+		);
 	}
 }

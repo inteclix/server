@@ -23,6 +23,7 @@ class MissionvlController extends Controller
 			->select(["missionvls.state"])->where("cars.id", "=", $car_id)->where("missionvls.state", "<>", "FIN MISSION")
 			->get()->all();
 		//dump($data);
+		return true;
 		return count($data) == 0 ? true : false;
 	}
 
@@ -37,7 +38,7 @@ class MissionvlController extends Controller
 			"depart_id" => "required",
 		]);
 		if (!$this->checkIfCarAvailableForMission($request->car_id)) {
-			return $this->http_unauthorized("Le véhicule est déjà en cours de missionvl");
+			return $this->http_unauthorized("Le véhicule est déjà en cours de mission");
 		}
 		if ($request->type == "VL") {
 			if ($this->hasRole($request, "AJOUTER_MISSION_VL")) {
@@ -55,9 +56,38 @@ class MissionvlController extends Controller
 				$missionvl->date_arrivee_mission = $request->date_arrivee_mission;
 				$missionvl->observation = $request->observation;
 				$missionvl->state = "EN ATTENTE";
+				$missionvl->type = "VL";
 				try {
 					$missionvl->save();
 				} catch (QueryException $e) {
+					return $this->http_bad();
+				}
+				return $this->http_ok($missionvl);
+			}
+		}
+
+		if ($request->type == "MD") {
+			if ($this->hasRole($request, "AJOUTER_MISSION_MD")) {
+				$missionvl = new Missionvl;
+				$missionvl->createdby_id = $request->auth->id;
+				$missionvl->numero = $request->numero;
+				$missionvl->car_id = $request->car_id;
+				$missionvl->remourque_id = $request->remourque_id;
+				$missionvl->client_id = $request->client_id;
+				$missionvl->driver1_id = $request->driver1_id;
+				$missionvl->driver2_id = $request->driver2_id;
+				$missionvl->date_bon_mission = $request->date_bon_mission;
+				$missionvl->depart_id = $request->depart_id;
+				$missionvl->destinations = $request->destinations;
+				$missionvl->date_depart_mission = $request->date_depart_mission;
+				$missionvl->date_arrivee_mission = $request->date_arrivee_mission;
+				$missionvl->observation = $request->observation;
+				$missionvl->state = "EN ATTENTE";
+				$missionvl->type = "MD";
+				try {
+					$missionvl->save();
+				} catch (QueryException $e) {
+					dd($e);
 					return $this->http_bad();
 				}
 				return $this->http_ok($missionvl);
@@ -77,34 +107,35 @@ class MissionvlController extends Controller
 			"depart_id" => "required",
 		]);
 
-		if ($request->type == "VL") {
-			try {
-				$missionvl = Missionvl::find($id);
-			} catch (QueryException $e) {
-				return $this->http_not_found();
-			}
-			if ($this->hasRole($request, "MODIFIER_MISSION_VL")) {
-				$missionvl->numero = $request->numero;
-				$missionvl->car_id = $request->car_id;
-				$missionvl->client_id = $request->client_id;
-				$missionvl->driver1_id = $request->driver1_id;
-				$missionvl->driver2_id = $request->driver2_id;
-				$missionvl->date_bon_mission = $request->date_bon_mission;
-				$missionvl->depart_id = $request->depart_id;
-				$missionvl->destinations = $request->destinations;
-				$missionvl->date_depart_mission = $request->date_depart_mission;
-				$missionvl->date_arrivee_mission = $request->date_arrivee_mission;
-				$missionvl->observation = $request->observation;
-				try {
-					$missionvl->save();
-				} catch (QueryException $e) {
-					return $this->http_bad();
-				}
-				return $this->http_ok($missionvl);
-			}
+		try {
+			$mission = Missionvl::find($id);
+		} catch (QueryException $e) {
+			return $this->http_not_found();
 		}
-
-		return $this->http_unauthorized();
+		if ($mission->type == "VL" && !$this->hasRole($request, "MODIFIER_MISSION_VL")) {
+			return $this->http_unauthorized();
+		}
+		if ($mission->type == "MD" && !$this->hasRole($request, "MODIFIER_MISSION_MD")) {
+			return $this->http_unauthorized();
+		}
+		$mission->numero = $request->numero;
+		$mission->car_id = $request->car_id;
+		$mission->remourque_id = $request->remourque_id;
+		$mission->client_id = $request->client_id;
+		$mission->driver1_id = $request->driver1_id;
+		$mission->driver2_id = $request->driver2_id;
+		$mission->date_bon_mission = $request->date_bon_mission;
+		$mission->depart_id = $request->depart_id;
+		$mission->destinations = $request->destinations;
+		$mission->date_depart_mission = $request->date_depart_mission;
+		$mission->date_arrivee_mission = $request->date_arrivee_mission;
+		$mission->observation = $request->observation;
+		try {
+			$mission->save();
+		} catch (QueryException $e) {
+			return $this->http_bad();
+		}
+		return $this->http_ok($mission);
 	}
 
 
@@ -112,9 +143,15 @@ class MissionvlController extends Controller
 	{
 		if ($this->hasRole($request, "SUPPRIMER_MISSION_VL")) {
 			try {
-				Missionvl::find($id);
+				$mission = Missionvl::find($id);
 			} catch (QueryException $e) {
 				return $this->http_not_found();
+			}
+			if ($mission->type == "VL" && !$this->hasRole($request, "SUPPRIMER_MISSION_VL")) {
+				return $this->http_unauthorized();
+			}
+			if ($mission->type == "MD" && !$this->hasRole($request, "SUPPRIMER_MISSION_MD")) {
+				return $this->http_unauthorized();
 			}
 			Missionvl::destroy($id);
 			return $this->http_ok();
@@ -127,40 +164,46 @@ class MissionvlController extends Controller
 		$this->validate($request, [
 			"state" => "required",
 		]);
-		if ($this->hasRole($request, "CHANGE_STATE_MISSION_VL")) {
-			try {
-				$mission = Missionvl::find($id);
-			} catch (QueryException $e) {
-				return $this->http_not_found();
-			}
-			$mission->state = $request->state;
-			try {
-				$mission->save();
-			} catch (QueryException $e) {
-				return $this->http_bad();
-			}
-			return $this->http_ok();
+		try {
+			$mission = Missionvl::find($id);
+		} catch (QueryException $e) {
+			return $this->http_not_found();
 		}
-		return $this->http_unauthorized();
+		if ($mission->type == "VL" && !$this->hasRole($request, "CHANGE_STATE_MISSION_VL")) {
+			return $this->http_unauthorized();
+		}
+		if ($mission->type == "MD" && !$this->hasRole($request, "CHANGE_STATE_MISSION_MD")) {
+			return $this->http_unauthorized();
+		}
+		$mission->state = $request->state;
+		try {
+			$mission->save();
+		} catch (QueryException $e) {
+			return $this->http_bad();
+		}
+		return $this->http_ok();
 	}
 
 	function accepteMission(Request $request, $id)
 	{
-		if ($this->hasRole($request, "VALIDER_MISSION_VL")) {
-			try {
-				$mission = Missionvl::find($id);
-			} catch (QueryException $e) {
-				return $this->http_not_found();
-			}
-			$mission->acceptedby_id = $request->auth->id;
-			try {
-				$mission->save();
-			} catch (QueryException $e) {
-				return $this->http_bad();
-			}
-			return $this->http_ok();
+		try {
+			$mission = Missionvl::find($id);
+		} catch (QueryException $e) {
+			return $this->http_not_found();
 		}
-		return $this->http_unauthorized();
+		if ($mission->type == "VL" && !$this->hasRole($request, "VALIDER_MISSION_VL")) {
+			return $this->http_unauthorized();
+		}
+		if ($mission->type == "MD" && !$this->hasRole($request, "VALIDER_MISSION_MD")) {
+			return $this->http_unauthorized();
+		}
+		$mission->acceptedby_id = $request->auth->id;
+		try {
+			$mission->save();
+		} catch (QueryException $e) {
+			return $this->http_bad();
+		}
+		return $this->http_ok();
 	}
 
 
@@ -232,7 +275,7 @@ class MissionvlController extends Controller
 				DB::raw("DATE_FORMAT(missionvls.date_depart_mission, '%d/%m/%Y') as missions_date_depart_mission"),
 				DB::raw("DATE_FORMAT(missionvls.date_arrivee_mission, '%d/%m/%Y') as missions_date_arrivee_mission"),
 				"missionvls.state as missionvls_state",
-				"missionvls.state as missionvls_state",
+				"missionvls.type as type",
 				"createdbys.username as createdby_username",
 				//"gpsbys.username as gpsby_username",
 				"acceptedbys.username as acceptedby_username",
@@ -250,6 +293,7 @@ class MissionvlController extends Controller
 				"departs.daira_name as departs_daira_name",
 				"departs.commune_name as departs_commune_name",
 				"missionvls.destinations as destinations",
+				"missionvls.type as type",
 				"createdbys.username as createdby_username",
 				"gpsbys.username as gpsby_username",
 				"acceptedbys.username as acceptedby_username",
@@ -267,9 +311,13 @@ class MissionvlController extends Controller
 			//->where('remourques.matricule', 'like', "%{$request->get("remourques_matricule")}%")
 			->where('cars.code_gps', 'like', "%{$request->get("code_gps")}%")
 			->where('clients.designation', 'like', "%{$request->get("clients_designation")}%")
-			->orderBy($sortBy, $sort);
-		//->where("owners.id", "=", $request->auth->id)
+			->where("driver1s.firstname", 'like', "%{$request->get("driver1s_fullname")}%");
+			if($request->get("type")){
+				$missionvls = $missionvls->where("missionvls.type", '=', $request->get("type"));
+			}
+			$missionvls = $missionvls->orderBy($sortBy, $sort);
 		//->where('groups.name', '=', $request->group)
+
 		if ($request->format == "excel") {
 			$missionvls = $missionvls->get();
 			$missionvls->prepend([
@@ -283,6 +331,7 @@ class MissionvlController extends Controller
 				"missionvls.date_depart_mission" => "DATE DEPART",
 				"missionvls.date_arrivee_mission" => "DATE ARRIVEE",
 				"missionvls.state" => "STATUS",
+				"missionvls.type" => "TYPE",
 				"createdby_username" => "CREE PAR",
 				//"gpsby_username" => "GPS PAR",
 				"acceptedby_username" => "VALIDER PAR",

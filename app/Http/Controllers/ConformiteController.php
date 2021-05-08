@@ -14,6 +14,7 @@ use Exception;
 use App\Indicateur;
 use App\Indicateurv;
 use App\Processu;
+use App\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -21,10 +22,14 @@ class ConformiteController extends Controller
 {
 	function create(Request $request)
 	{
+
 		$this->validate($request, [
 			"name" => "required",
 			"processu_id" => "required"
 		]);
+		if ($request->indicateurv_id && count(Conformite::where("indicateurv_id", "=", $request->indicateurv_id)->get()->all()) !== 0) {
+			return $this->http_unauthorized("Conformite est existe déja");
+		}
 		if ($this->hasRole($request, "SMI_AJOUTER_NON_CONFORMITE")) {
 			$nonconformite = new Conformite;
 			$nonconformite->name = $request->name;
@@ -39,7 +44,7 @@ class ConformiteController extends Controller
 			try {
 				$nonconformite->save();
 			} catch (QueryException $e) {
-				//dd($e);
+				dd($e);
 				return $this->error("Error!");
 			}
 			return $this->success($nonconformite, "Bien ajouter");
@@ -83,14 +88,15 @@ class ConformiteController extends Controller
 	{
 		if ($this->hasRole($request, "SMI_LISTE_CONFORMITES")) {
 
-			$nonconformite = Conformite::orderBy("id", "asc")->with("actions")->get()->all();
+			$nonconformite = Conformite::orderBy("id", "asc")->where("processu_id", "=", $request->processu_id)->with("actions")->get()->all();
 			$data = [];
 			foreach ($nonconformite as $obj) {
 				$obj->processu = $obj->processu()->get()->all()[0];
-				$obj->createdby = $obj->createdby()->get()->all()[0];
+				$obj->createdby = User::find($obj->createdby_id);
+				$obj->acceptedby = User::find($obj->acceptedby_id);
 				//TODO: acceptedby
+				array_push($data, $obj);
 				if ($this->hasRole($request, "PROCESSUS_" . $obj->processu->slog)) {
-					array_push($data, $obj);
 				}
 			}
 			return $this->http_ok($data);
@@ -140,5 +146,11 @@ class ConformiteController extends Controller
 			return $this->http_ok($nonconformite);
 		}
 		return $this->http_unauthorized();
+	}
+	function nature_action_by_processus(Request $request, $id)
+	{
+		return $this->http_ok(
+			Conformite::where("processu_id", "=", $id)->select('nature', DB::raw('count(nature) quantity'))->groupBy('nature')->get()
+		);
 	}
 }

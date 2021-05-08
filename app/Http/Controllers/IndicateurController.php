@@ -11,6 +11,7 @@ use Exception;
 
 use App\Indicateur;
 use App\Indicateurv;
+use App\Processu;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -26,15 +27,20 @@ class IndicateurController extends Controller
 		if ($this->hasRole($request, "SMI_INDICATEURS")) {
 			$data = DB::table("indicateurvs")
 				->join("indicateurs", "indicateurs.id", "=", "indicateurvs.indicateur_id")
+				->join("users as createdbys", "indicateurvs.createdby_id", "=", "createdbys.id")
 				->select([
 					"indicateurvs.id as id",
 					"valeur",
 					"date",
 					"comment",
-					"name"
+					"name",
+					"seuil",
+					"createdbys.username as createdbys_username"
 				])
 				->where("indicateurs.id", "=", $id)
-				->orderBy("id", "asc")
+				->orderBy("date->year", "asc")
+				->orderBy("date->value", "asc")
+				//->orderBy("date", "asc")
 				->paginate(
 					$pageSize, // per page (may be get it from request)
 					['*'], // columns to select from table (default *, means all fields)
@@ -45,24 +51,6 @@ class IndicateurController extends Controller
 		} else {
 			$this->http_unauthorized();
 		}
-		try {
-			$indicateur = Indicateur::findOrFail($id);
-			$indicateur->processu = $indicateur->processu()->get()->all()[0];
-			$indicateur->objectif = $indicateur->objectif()->get()->all()[0];
-			$indicateur->valeurs = $indicateur->valeurs()
-				->orderByRaw("date->'$.year'", "asc")
-				->orderByRaw("date->'$.value'", "asc")
-				->take(8)->get()->all();
-		} catch (Exception $e) {
-			return new JsonResponse([
-				'message' => 'Id d\'ont exist',
-			], Response::HTTP_BAD_REQUEST);
-		}
-
-		return new JsonResponse([
-			'message' => 'Success get',
-			'data' => $indicateur
-		]);
 	}
 
 	function getb($id, Request $request)
@@ -104,9 +92,16 @@ class IndicateurController extends Controller
 
 	function getAll(Request $request)
 	{
-		if ($this->hasRole($request, "SMI_INDICATEURS")) {
 
-			$indicateurs = Indicateur::orderBy("id", "asc")->get()->all();
+		$sort = $request->get("sort") === "ascend" ? "asc" : "desc";
+		$sortBy = $request->get("sortBy") ? $request->get("sortBy") : "id";
+		$current = $request->get("current") ? $request->get("current") : 1;
+		$pageSize = $request->get("pageSize") ? $request->get("pageSize") : 20;
+		if ($this->hasRole($request, "SMI_INDICATEURS")) {
+			$indicateurs = Indicateur::orderBy("id", "asc")
+				->where("processu_id", "=", $request->processu_id)
+				->where('name', 'like', "%{$request->get("name")}%")
+				->get()->all();
 			$data = [];
 			foreach ($indicateurs as $obj) {
 				$obj->processu = $obj->processu()->get()->all()[0];
@@ -114,15 +109,11 @@ class IndicateurController extends Controller
 				$obj->valeurs = $obj->valeurs()
 					->orderByRaw("date->'$.year'", "asc")
 					->orderByRaw("date->'$.value'", "asc")
-					->get()->all();
-				if ($this->hasRole($request, "PROCESSUS_" . $obj->processu->slog)) {
-					array_push($data, $obj);
-				}
+					->take(8)
+					->get();
+				array_push($data, $obj);
 			}
-			return new JsonResponse([
-				'message' => 'Success get all',
-				'data' => $data !== NULL ? $data : []
-			], Response::HTTP_OK);
+			return $this->http_ok($data);
 		} else {
 			$this->http_unauthorized();
 		}
@@ -180,13 +171,14 @@ class IndicateurController extends Controller
 		if (count($exist) > 0) {
 			return $this->http_unauthorized("La valeur de cette date est deja existe");
 		}
-		if ($this->hasRole($request, "AJOUTER_VALEUR_INDICATEUR")) {
+		if ($this->hasRole($request, "AJOUTER_VALEUR_INDICATEUR") && $this->hasRole($request, "PROCESSUS_" . Processu::find(Indicateur::find($request->indicateur_id)->processu_id)->slog)) {
 			$indicateurv = new Indicateurv();
 			$indicateurv->indicateur_id = $request->indicateur_id;
 
 			$indicateurv->date = $request->date;
 			$indicateurv->valeur = $request->valeur;
 			$indicateurv->comment = $request->comment;
+			$indicateurv->createdby_id = $request->auth->id;
 			try {
 				$indicateurv->save();
 			} catch (QueryException $e) {
@@ -203,9 +195,12 @@ class IndicateurController extends Controller
 	{
 		if ($this->hasRole($request, "SUPPRIMER_INDICATEUR")) {
 			try {
-				Indicateur::findOrFail($id);
+				$indicateur = Indicateur::findOrFail($id);
 			} catch (Exception $e) {
 				return $this->error("Id don't exist");
+			}
+			if (!$this->hasRole($request, "PROCESSUS_" . Processu::find($indicateur->processu_id)->slog)) {
+				return $this->http_unauthorized();
 			}
 			try {
 				Indicateur::destroy($id);
@@ -219,11 +214,15 @@ class IndicateurController extends Controller
 	}
 	function deleteValeur($id, Request $request)
 	{
-		if ($this->hasRole($request, "SUPPRIMER_VALEUR_INDICATEUR")) {
+		if ($this->hasRole($request, "SUPPRIMER_INDICATEURV")) {
 			try {
-				Indicateurv::findOrFail($id);
+				$indicateurv = Indicateurv::findOrFail($id);
 			} catch (Exception $e) {
 				return $this->error("Id don't exist");
+			}
+			$processus = Processu::find(Indicateur::find($indicateurv->indicateur_id)->processu_id);
+			if (!$this->hasRole($request, "PROCESSUS_" . $processus->slog)) {
+				return $this->http_unauthorized();
 			}
 			try {
 				Indicateurv::destroy($id);
@@ -231,6 +230,23 @@ class IndicateurController extends Controller
 				return $this->error("Error !");
 			}
 			return $this->success([], "Bien Supprimer");
+		} else {
+			return $this->http_unauthorized();
+		}
+	}
+
+	function updateValeur($id, Request $request)
+	{
+		$indicateurv = Indicateurv::find($id);
+		if ($this->hasRole($request, "AJOUTER_VALEUR_INDICATEUR") && $this->hasRole($request, "PROCESSUS_" . Processu::find(Indicateur::find($indicateurv->indicateur_id)->processu_id)->slog)) {
+			$indicateurv->valeur = $request->valeur;
+			$indicateurv->createdby_id = $request->auth->id;
+			try {
+				$indicateurv->save();
+			} catch (QueryException $e) {
+				return $this->error("Error !");
+			}
+			return $this->success($indicateurv);
 		} else {
 			return $this->http_unauthorized();
 		}

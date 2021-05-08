@@ -531,6 +531,10 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
 		'uses' => 'IndicateurController@deleteValeur',
 		'as' => 'api.indicateurs.deleteValeur'
 	]);
+	$router->post('/smi_indicateurvs/update/{id}', [
+		'uses' => 'IndicateurController@updateValeur',
+		'as' => 'api.indicateurs.updateValeur'
+	]);
 	// Non conformités
 
 
@@ -555,12 +559,16 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
 		'uses' => 'ConformiteController@delete',
 		'as' => 'api.conformites.delete'
 	]);
-	
+
 	$router->get('/smi_conformites/search', [
 		'uses' => 'ConformiteController@search',
 		'as' => 'api.conformites.search'
 	]);
 
+	$router->get('/smi_conformites/nature/{id}', [
+		'uses' => 'ConformiteController@nature_action_by_processus',
+		'as' => 'api.conformites.nature_action_by_processus'
+	]);
 	// Plan actions
 
 
@@ -588,5 +596,10 @@ $router->group(['middleware' => 'jwt.auth'], function () use ($router) {
 	$router->post('/smi_actions/delete/{id}', [
 		'uses' => 'ActionController@delete',
 		'as' => 'api.actions.delete'
+	]);
+
+	$router->get('/smi_actions/nature/{id}', [
+		'uses' => 'ActionController@nature_action_by_processus',
+		'as' => 'api.actions.nature_action_by_processus'
 	]);
 });

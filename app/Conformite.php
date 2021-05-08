@@ -16,6 +16,10 @@ class Conformite extends Model
 	}
 	public function createdby()
 	{
-		return $this->belongsTo('App\User');
+		return $this->belongsTo('App\User', 'createdby_id');
+	}
+	public function acceptedby()
+	{
+		return $this->belongsTo('App\User', 'acceptedby_id');
 	}
 }
